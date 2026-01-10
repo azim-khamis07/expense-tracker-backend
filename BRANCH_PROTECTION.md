@@ -46,24 +46,31 @@ This document outlines the branch protection rules for the ExpenseTracker backen
 
 ## Setup Instructions
 
-### Option 1: GitHub Web UI (Recommended for First Time)
+### ✅ Status: Branch Protection Configured via GitHub CLI
 
-1. Navigate to: https://github.com/azim-khamis07/expense-tracker-backend/settings/branches
+Branch protection rules have been successfully configured using GitHub CLI on 2026-01-10.
 
-2. Click **"Add rule"** or **"Add branch protection rule"**
+### Option 1: GitHub CLI (✅ Completed)
 
-3. For **stage** branch:
-   - Enter `stage` as the branch name pattern
-   - Configure settings as listed above
-   - Click **"Create"** or **"Save changes"**
+The branch protection rules were configured using the following commands:
 
-4. For **production** branch:
-   - Click **"Add rule"** again
-   - Enter `production` as the branch name pattern
-   - Configure settings as listed above (with 2 approvals)
-   - Click **"Create"** or **"Save changes"**
+```bash
+# Protect stage branch
+gh api repos/azim-khamis07/expense-tracker-backend/branches/stage/protection \
+  -X PUT \
+  --input stage-protection.json
 
-### Option 2: GitHub CLI (Automated)
+# Protect production branch  
+gh api repos/azim-khamis07/expense-tracker-backend/branches/production/protection \
+  -X PUT \
+  --input production-protection.json
+```
+
+**Configuration Files Used:**
+- Stage protection: 1 approval required, admins cannot bypass
+- Production protection: 2 approvals required, strict protection
+
+### Option 2: GitHub Web UI (Alternative Method)
 
 If you have GitHub CLI (`gh`) installed and authenticated:
 
