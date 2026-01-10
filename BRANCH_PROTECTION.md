@@ -4,10 +4,11 @@ This document outlines the branch protection rules for the ExpenseTracker backen
 
 ## Branches Overview
 
-- **main**: Base branch (neutral, can be used as fallback)
-- **dev**: Development branch (main development work)
-- **stage**: Staging environment (protected, requires PR)
+- **dev**: Default development branch (main development work, no protection)
+- **stage**: Staging environment (protected, requires PR with 1 approval)
 - **production**: Production deployment (strictly protected, requires 2 approvals)
+
+**Note:** The repository uses a 3-branch workflow (dev → stage → production). The `dev` branch is set as the default branch.
 
 ## Branch Protection Rules
 
@@ -97,7 +98,7 @@ gh api repos/azim-khamis07/expense-tracker-backend/branches/production/protectio
 ### Development Flow
 
 ```
-1. Create feature branch from dev:
+1. Create feature branch from dev (default branch):
    git checkout -b feature/my-feature dev
 
 2. Work on feature, commit changes:
@@ -109,6 +110,7 @@ gh api repos/azim-khamis07/expense-tracker-backend/branches/production/protectio
 
 4. Create PR: feature/my-feature → dev
    - Can be merged directly (no protection on dev)
+   - dev is the default branch
 
 5. After testing in dev, create PR: dev → stage
    - Requires 1 approval
@@ -122,13 +124,12 @@ gh api repos/azim-khamis07/expense-tracker-backend/branches/production/protectio
    - Cannot be bypassed by administrators
 ```
 
-### Optional: Set Dev as Default Branch
+### ✅ Default Branch: dev
 
-1. Go to: https://github.com/azim-khamis07/expense-tracker-backend/settings/branches
-2. Under **Default branch**, click the switch/edit icon
-3. Select `dev` from the dropdown
-4. Click **Update**
-5. Confirm the change
+The repository's default branch is set to `dev`. This was configured using GitHub CLI:
+```bash
+gh api repos/azim-khamis07/expense-tracker-backend -X PATCH -f default_branch=dev
+```
 
 ## Verification
 
@@ -145,7 +146,8 @@ git push origin stage  # Should be rejected
 
 ## Notes
 
-- **dev** branch is intentionally not protected to allow rapid development
-- **main** branch can remain as a neutral base or backup
+- **dev** branch is the default branch and intentionally not protected to allow rapid development
+- The repository uses a 3-branch workflow: **dev → stage → production**
+- **main** branch has been removed (only 3 branches needed: dev, stage, production)
 - Consider adding CI/CD status checks later for automated testing
-- Branch protection rules can be modified anytime via GitHub Settings
+- Branch protection rules can be modified anytime via GitHub Settings or GitHub CLI
