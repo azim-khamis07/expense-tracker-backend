@@ -4,7 +4,21 @@ from sqlalchemy.orm import declarative_base
 Base = declarative_base()
 
 # Import all models here for Alembic auto-detection
-# (We'll add these as we create models)
-# from app.models.user import User
-# from app.models.category import Category
-# from app.models.transaction import Transaction
+from app.models.category import Category
+from app.models.receipt import Receipt
+from app.models.report_job import ReportJob
+from app.models.tag import Tag, transaction_tags
+from app.models.transaction import Transaction
+from app.models.user import User
+
+# Export for easy imports
+__all__ = [
+    "Base",
+    "User",
+    "Category",
+    "Tag",
+    "transaction_tags",
+    "Transaction",
+    "Receipt",
+    "ReportJob",
+]

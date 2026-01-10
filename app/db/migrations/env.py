@@ -11,6 +11,15 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 from app.core.config import settings
 from app.db.base import Base
 
+# Import all models here for Alembic auto-detection
+# This ensures all models are registered with Base.metadata
+from app.models.category import Category  # noqa: F401
+from app.models.receipt import Receipt  # noqa: F401
+from app.models.report_job import ReportJob, ReportStatus  # noqa: F401
+from app.models.tag import Tag, transaction_tags  # noqa: F401
+from app.models.transaction import Transaction  # noqa: F401
+from app.models.user import User  # noqa: F401
+
 # Alembic Config object
 config = context.config
 

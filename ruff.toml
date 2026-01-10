@@ -19,6 +19,13 @@ ignore = [
 
 [lint.per-file-ignores]
 "__init__.py" = ["F401"]  # Allow unused imports in __init__.py
+"app/db/base.py" = ["E402"]  # Allow imports after Base definition (needed for Alembic)
+"app/db/migrations/versions/*.py" = [
+    "UP035",  # Migration files use typing imports
+    "I001",  # Import sorting (auto-generated files)
+    "UP007",  # Union types (auto-generated files may use old syntax)
+]
+"app/models/*.py" = ["F821"]  # Forward references in type annotations (valid)
 
 [format]
 quote-style = "double"
