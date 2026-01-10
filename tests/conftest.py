@@ -1,7 +1,7 @@
-import asyncio
 from collections.abc import AsyncGenerator
 
 import pytest
+import pytest_asyncio
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -14,17 +14,9 @@ from app.main import app
 TEST_DATABASE_URL = settings.DATABASE_URL.replace("expense_tracker", "expense_tracker_test")
 
 
-@pytest.fixture(scope="session")
-def event_loop():
-    """Create event loop for async tests."""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
-
-
-@pytest.fixture(scope="session")
+@pytest_asyncio.fixture(scope="function")
 async def test_engine():
-    """Create test database engine."""
+    """Create test database engine per test function."""
     engine = create_async_engine(TEST_DATABASE_URL, echo=False, pool_pre_ping=True)
 
     # Create all tables
@@ -33,14 +25,14 @@ async def test_engine():
 
     yield engine
 
-    # Drop all tables after tests
+    # Cleanup: Drop all tables after test
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
 
     await engine.dispose()
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def db_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
     """Create test database session."""
     async_session = async_sessionmaker(

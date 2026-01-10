@@ -3,7 +3,6 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
@@ -17,6 +16,8 @@ from app.core.logging_config import setup_logging
 from app.core.middleware import LoggingMiddleware, RequestIDMiddleware, TimingMiddleware
 from app.db.session import engine
 from app.infra.redis import redis_client
+from app.modules.auth.router import router as auth_router
+from app.modules.users.router import router as users_router
 
 # Setup logging first
 setup_logging()
@@ -26,7 +27,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title=settings.APP_NAME,
     description="Production-grade expense tracking API",
-    version="0.1.0",
+    version="0.2.0",
     docs_url=f"{settings.api_prefix}/docs",
     redoc_url=f"{settings.api_prefix}/redoc",
     openapi_url=f"{settings.api_prefix}/openapi.json",
@@ -51,11 +52,15 @@ app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(IntegrityError, integrity_error_handler)
 app.add_exception_handler(Exception, general_exception_handler)
 
+# Include routers
+app.include_router(auth_router, prefix=settings.api_prefix)
+app.include_router(users_router, prefix=settings.api_prefix)
+
 
 @app.on_event("startup")
 async def startup_event():
     """Run on application startup."""
-    logger.info(f"Starting {settings.APP_NAME} in {settings.ENVIRONMENT} mode")
+    logger.info(f"Starting {settings.APP_NAME} v0.2.0 in {settings.ENVIRONMENT} mode")
 
     # Initialize Redis
     try:
@@ -77,23 +82,9 @@ async def shutdown_event():
     await engine.dispose()
 
 
-@app.get("/")
-async def root():
-    """Root endpoint - redirects to API root."""
-    return RedirectResponse(url=f"{settings.api_prefix}/")
-
-
-@app.get("/docs")
-async def docs_redirect():
-    """Docs redirect - redirects to versioned docs."""
-    return RedirectResponse(url=f"{settings.api_prefix}/docs")
-
-
 @app.get("/health")
 async def health_check(request: Request):
-    """
-    Health check endpoint with dependency checks.
-    """
+    """Health check endpoint with dependency checks."""
     request_id = getattr(request.state, "request_id", None)
 
     # Check Redis
@@ -120,13 +111,29 @@ async def health_check(request: Request):
     return {
         "status": overall_status,
         "environment": settings.ENVIRONMENT,
-        "version": "0.1.0",
+        "version": "0.2.0",
         "request_id": request_id,
         "checks": {
             "database": "healthy" if db_healthy else "unhealthy",
             "redis": "healthy" if redis_healthy else "unhealthy",
         },
     }
+
+
+@app.get("/")
+async def root():
+    """Root endpoint - redirects to API root."""
+    from fastapi.responses import RedirectResponse
+
+    return RedirectResponse(url=f"{settings.api_prefix}/")
+
+
+@app.get("/docs")
+async def docs_redirect():
+    """Docs redirect - redirects to versioned docs."""
+    from fastapi.responses import RedirectResponse
+
+    return RedirectResponse(url=f"{settings.api_prefix}/docs")
 
 
 @app.get(f"{settings.api_prefix}/")
