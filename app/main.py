@@ -18,6 +18,7 @@ from app.db.session import engine
 from app.infra.redis import redis_client
 
 # Import all routers
+from app.modules.analytics.router import router as analytics_router
 from app.modules.auth.router import router as auth_router
 from app.modules.categories.router import router as categories_router
 from app.modules.tags.router import router as tags_router
@@ -31,8 +32,8 @@ logger = logging.getLogger(__name__)
 # Create FastAPI app instance
 app = FastAPI(
     title=settings.APP_NAME,
-    description="Production-grade expense tracking API",
-    version="0.3.0",
+    description="Production-grade expense tracking API with analytics",
+    version="0.4.0",
     docs_url=f"{settings.api_prefix}/docs",
     redoc_url=f"{settings.api_prefix}/redoc",
     openapi_url=f"{settings.api_prefix}/openapi.json",
@@ -63,12 +64,13 @@ app.include_router(users_router, prefix=settings.api_prefix)
 app.include_router(categories_router, prefix=settings.api_prefix)
 app.include_router(tags_router, prefix=settings.api_prefix)
 app.include_router(transactions_router, prefix=settings.api_prefix)
+app.include_router(analytics_router, prefix=settings.api_prefix)
 
 
 @app.on_event("startup")
 async def startup_event():
     """Run on application startup."""
-    logger.info(f"Starting {settings.APP_NAME} v0.3.0 in {settings.ENVIRONMENT} mode")
+    logger.info(f"Starting {settings.APP_NAME} v0.4.0 in {settings.ENVIRONMENT} mode")
 
     # Initialize Redis
     try:
@@ -117,7 +119,7 @@ async def health_check(request: Request):
     return {
         "status": overall_status,
         "environment": settings.ENVIRONMENT,
-        "version": "0.3.0",
+        "version": "0.4.0",
         "request_id": getattr(request.state, "request_id", None),
         "checks": {
             "database": "healthy" if db_healthy else "unhealthy",
@@ -155,6 +157,9 @@ async def api_root():
             "Transactions with Advanced Filtering",
             "Cursor-based Pagination",
             "Statistics & Analytics",
+            "Dashboard with Caching",
+            "Time Series & Trends",
+            "Tag Analytics",
         ],
     }
 
