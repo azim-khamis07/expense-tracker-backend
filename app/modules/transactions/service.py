@@ -241,6 +241,7 @@ class TransactionService:
             tags.append({"id": tag.id, "name": tag.name, "color": tag.color})
 
         # Check if has receipt (one-to-one relationship)
+        # Receipt is eagerly loaded via joinedload in repository queries
         has_receipt = transaction.receipt is not None
 
         return TransactionResponse(

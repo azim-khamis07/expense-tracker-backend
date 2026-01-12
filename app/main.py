@@ -21,6 +21,7 @@ from app.infra.redis import redis_client
 from app.modules.analytics.router import router as analytics_router
 from app.modules.auth.router import router as auth_router
 from app.modules.categories.router import router as categories_router
+from app.modules.receipts.router import router as receipts_router
 from app.modules.tags.router import router as tags_router
 from app.modules.transactions.router import router as transactions_router
 from app.modules.users.router import router as users_router
@@ -32,8 +33,8 @@ logger = logging.getLogger(__name__)
 # Create FastAPI app instance
 app = FastAPI(
     title=settings.APP_NAME,
-    description="Production-grade expense tracking API with analytics",
-    version="0.4.0",
+    description="Production-grade expense tracking API with receipts",
+    version="0.5.0",
     docs_url=f"{settings.api_prefix}/docs",
     redoc_url=f"{settings.api_prefix}/redoc",
     openapi_url=f"{settings.api_prefix}/openapi.json",
@@ -65,12 +66,13 @@ app.include_router(categories_router, prefix=settings.api_prefix)
 app.include_router(tags_router, prefix=settings.api_prefix)
 app.include_router(transactions_router, prefix=settings.api_prefix)
 app.include_router(analytics_router, prefix=settings.api_prefix)
+app.include_router(receipts_router, prefix=settings.api_prefix)
 
 
 @app.on_event("startup")
 async def startup_event():
     """Run on application startup."""
-    logger.info(f"Starting {settings.APP_NAME} v0.4.0 in {settings.ENVIRONMENT} mode")
+    logger.info(f"Starting {settings.APP_NAME} v0.5.0 in {settings.ENVIRONMENT} mode")
 
     # Initialize Redis
     try:
@@ -98,9 +100,8 @@ async def health_check(request: Request):
     # Check Redis
     redis_healthy = False
     try:
-        if redis_client.redis:
-            await redis_client.redis.ping()
-            redis_healthy = True
+        await redis_client.redis.ping()
+        redis_healthy = True
     except Exception as e:
         logger.error(f"Redis health check failed: {e}")
 
@@ -119,29 +120,13 @@ async def health_check(request: Request):
     return {
         "status": overall_status,
         "environment": settings.ENVIRONMENT,
-        "version": "0.4.0",
+        "version": "0.5.0",
         "request_id": getattr(request.state, "request_id", None),
         "checks": {
             "database": "healthy" if db_healthy else "unhealthy",
             "redis": "healthy" if redis_healthy else "unhealthy",
         },
     }
-
-
-@app.get("/")
-async def root():
-    """Root endpoint - redirects to API root."""
-    from fastapi.responses import RedirectResponse
-
-    return RedirectResponse(url=f"{settings.api_prefix}/")
-
-
-@app.get("/docs")
-async def docs_redirect():
-    """Docs redirect - redirects to versioned docs."""
-    from fastapi.responses import RedirectResponse
-
-    return RedirectResponse(url=f"{settings.api_prefix}/docs")
 
 
 @app.get(f"{settings.api_prefix}/")
@@ -160,17 +145,7 @@ async def api_root():
             "Dashboard with Caching",
             "Time Series & Trends",
             "Tag Analytics",
+            "Receipt Upload & Management",
+            "S3 Storage with Presigned URLs",
         ],
     }
-
-
-if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run(
-        "app.main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        log_level=settings.LOG_LEVEL.lower(),
-    )

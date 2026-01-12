@@ -30,12 +30,20 @@ class Settings(BaseSettings):
     AWS_ACCESS_KEY_ID: str = ""
     AWS_SECRET_ACCESS_KEY: str = ""
     S3_BUCKET: str = "expense-tracker-receipts"
+    S3_REGION: str = "us-east-1"
+    S3_ACCESS_KEY_ID: str = ""
+    S3_SECRET_ACCESS_KEY: str = ""
+    S3_ENDPOINT_URL: str = ""  # For MinIO or custom S3-compatible storage
+
+    # File Upload
+    MAX_UPLOAD_SIZE: int = 10485760  # 10MB
+    ALLOWED_MIME_TYPES: str = "image/jpeg,image/png,image/gif,image/webp,application/pdf"
 
     # Celery
     CELERY_BROKER_URL: str
     CELERY_RESULT_BACKEND: str
 
-    # CORS (stored as string from env, parsed to list via property)
+    # CORS (stored as string, parsed to list via property)
     CORS_ORIGINS_RAW: str = Field(default="http://localhost:3000", validation_alias="CORS_ORIGINS")
 
     # Logging
@@ -50,6 +58,15 @@ class Settings(BaseSettings):
     def CORS_ORIGINS(self) -> list[str]:
         """Parse comma-separated CORS origins into a list."""
         return [origin.strip() for origin in self.CORS_ORIGINS_RAW.split(",") if origin.strip()]
+
+    @property
+    def ALLOWED_MIME_TYPES_LIST(self) -> list[str]:
+        """Parse comma-separated MIME types into a list."""
+        return [
+            mime_type.strip()
+            for mime_type in self.ALLOWED_MIME_TYPES.split(",")
+            if mime_type.strip()
+        ]
 
     @property
     def api_prefix(self) -> str:
