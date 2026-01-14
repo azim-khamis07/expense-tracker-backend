@@ -140,8 +140,9 @@ jobs:
       - name: Notify deployment
         if: always()
         uses: 8398a7/action-slack@v3
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
         with:
           status: ${{ job.status }}
           text: 'Stage deployment ${{ job.status }}'
-          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
         continue-on-error: true
