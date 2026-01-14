@@ -34,6 +34,22 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Create ECR repositories if they don't exist
+        run: |
+          REPOS=("expense-tracker-api" "expense-tracker-worker" "expense-tracker-flower")
+          for REPO in "${REPOS[@]}"; do
+            if ! aws ecr describe-repositories --repository-names "$REPO" --region ${{ env.AWS_REGION }} 2>/dev/null; then
+              echo "Creating ECR repository: $REPO"
+              aws ecr create-repository \
+                --repository-name "$REPO" \
+                --region ${{ env.AWS_REGION }} \
+                --image-scanning-configuration scanOnPush=true \
+                --encryption-configuration encryptionType=AES256
+            else
+              echo "ECR repository $REPO already exists"
+            fi
+          done
+
       - name: Build, tag, and push API image
         id: build-api
         env:
