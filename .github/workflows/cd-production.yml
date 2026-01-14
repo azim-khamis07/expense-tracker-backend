@@ -128,6 +128,10 @@ jobs:
       - name: Run database migrations
         env:
           DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+          REDIS_URL: ${{ secrets.REDIS_URL || 'redis://localhost:6379/0' }}
+          JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY || 'temp-secret-for-migrations' }}
+          CELERY_BROKER_URL: ${{ secrets.CELERY_BROKER_URL || secrets.REDIS_URL || 'redis://localhost:6379/1' }}
+          CELERY_RESULT_BACKEND: ${{ secrets.CELERY_RESULT_BACKEND || secrets.REDIS_URL || 'redis://localhost:6379/2' }}
         run: |
           pip install alembic psycopg2-binary asyncpg
           alembic upgrade head
