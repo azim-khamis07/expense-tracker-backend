@@ -5,7 +5,8 @@
 .terraform.lock.hcl
 *.tfvars
 !*.tfvars.example
-backend-*.conf
+# Allow backend configs (needed for CI/CD)
+# backend-*.conf
 !backend-*.conf.example
 
 # Crash log files
