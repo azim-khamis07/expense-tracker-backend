@@ -1,5 +1,6 @@
 """Unit tests for categories service."""
 
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
@@ -32,9 +33,15 @@ class TestCategoryService:
         """Test successful category creation."""
         mock_category = AsyncMock()
         mock_category.id = "cat123"
+        mock_category.user_id = "user123"
         mock_category.name = "Food"
+        mock_category.type = "expense"
+        mock_category.description = "Food expenses"
+        mock_category.created_at = datetime.now(UTC)
+        mock_category.updated_at = datetime.now(UTC)
+        mock_repo.name_exists = AsyncMock(return_value=False)
         mock_repo.create = AsyncMock(return_value=mock_category)
-        mock_repo.get_by_name_and_user = AsyncMock(return_value=None)
+        mock_repo.get_transaction_count = AsyncMock(return_value=0)
 
         category_response = await service.create_category(
             "user123", CategoryCreate(name="Food", type="expense", description="Food expenses")
@@ -58,7 +65,14 @@ class TestCategoryService:
         """Test getting category by ID."""
         mock_category = AsyncMock()
         mock_category.id = "cat123"
+        mock_category.user_id = "user123"
+        mock_category.name = "Food"
+        mock_category.type = "expense"
+        mock_category.description = "Food expenses"
+        mock_category.created_at = datetime.now(UTC)
+        mock_category.updated_at = datetime.now(UTC)
         mock_repo.get_by_id = AsyncMock(return_value=mock_category)
+        mock_repo.get_transaction_count = AsyncMock(return_value=0)
 
         category_response = await service.get_category("cat123", "user123")
 
@@ -79,6 +93,11 @@ class TestCategoryService:
         mock_category = AsyncMock()
         mock_category.id = "cat123"
         mock_category.user_id = "user123"
+        mock_category.name = "Updated Food"
+        mock_category.type = "expense"
+        mock_category.description = "Updated description"
+        mock_category.created_at = datetime.now(UTC)
+        mock_category.updated_at = datetime.now(UTC)
         mock_repo.get_by_id = AsyncMock(return_value=mock_category)
         mock_repo.name_exists = AsyncMock(return_value=False)
         mock_repo.update = AsyncMock(return_value=mock_category)
@@ -98,6 +117,7 @@ class TestCategoryService:
         mock_category.id = "cat123"
         mock_category.user_id = "user123"
         mock_repo.get_by_id = AsyncMock(return_value=mock_category)
+        mock_repo.get_transaction_count = AsyncMock(return_value=0)
         mock_repo.delete = AsyncMock()
 
         await service.delete_category("user123", "cat123")
@@ -107,12 +127,16 @@ class TestCategoryService:
     @pytest.mark.asyncio
     async def test_list_categories(self, service, mock_repo):
         """Test listing categories."""
-
+        now = datetime.now(UTC)
         mock_categories = [AsyncMock(), AsyncMock()]
         for cat in mock_categories:
             cat.id = "cat123"
+            cat.user_id = "user123"
             cat.name = "Food"
             cat.type = "expense"
+            cat.description = "Food expenses"
+            cat.created_at = now
+            cat.updated_at = now
         mock_repo.get_all_by_user = AsyncMock(return_value=mock_categories)
         mock_repo.get_counts_by_type = AsyncMock(return_value={"expense": 1, "income": 0})
         mock_repo.get_transaction_count = AsyncMock(return_value=0)

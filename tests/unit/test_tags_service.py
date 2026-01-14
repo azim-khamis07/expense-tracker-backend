@@ -1,5 +1,6 @@
 """Unit tests for tags service."""
 
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
@@ -32,7 +33,13 @@ class TestTagService:
         """Test successful tag creation."""
         from app.models.tag import Tag
 
-        mock_tag = Tag(id="tag123", user_id="user123", name="urgent", color="#FF0000")
+        mock_tag = Tag(
+            id="tag123",
+            user_id="user123",
+            name="urgent",
+            color="#FF0000",
+            created_at=datetime.now(UTC),
+        )
         mock_repo.create = AsyncMock(return_value=mock_tag)
         mock_repo.name_exists = AsyncMock(return_value=False)
         mock_repo.get_transaction_count = AsyncMock(return_value=0)
@@ -59,7 +66,13 @@ class TestTagService:
         """Test getting tag by ID."""
         from app.models.tag import Tag
 
-        mock_tag = Tag(id="tag123", user_id="user123", name="urgent", color="#FF0000")
+        mock_tag = Tag(
+            id="tag123",
+            user_id="user123",
+            name="urgent",
+            color="#FF0000",
+            created_at=datetime.now(UTC),
+        )
         mock_repo.get_by_id = AsyncMock(return_value=mock_tag)
         mock_repo.get_transaction_count = AsyncMock(return_value=0)
 
@@ -81,7 +94,13 @@ class TestTagService:
         """Test successful tag update."""
         from app.models.tag import Tag
 
-        mock_tag = Tag(id="tag123", user_id="user123", name="urgent", color="#FF0000")
+        mock_tag = Tag(
+            id="tag123",
+            user_id="user123",
+            name="urgent",
+            color="#FF0000",
+            created_at=datetime.now(UTC),
+        )
         mock_repo.get_by_id = AsyncMock(return_value=mock_tag)
         mock_repo.name_exists = AsyncMock(return_value=False)
         mock_repo.update = AsyncMock(return_value=mock_tag)
@@ -112,9 +131,10 @@ class TestTagService:
         """Test listing tags."""
         from app.models.tag import Tag
 
+        now = datetime.now(UTC)
         mock_tags = [
-            Tag(id="tag1", user_id="user123", name="tag1", color="#FF0000"),
-            Tag(id="tag2", user_id="user123", name="tag2", color="#00FF00"),
+            Tag(id="tag1", user_id="user123", name="tag1", color="#FF0000", created_at=now),
+            Tag(id="tag2", user_id="user123", name="tag2", color="#00FF00", created_at=now),
         ]
         mock_repo.get_all_by_user = AsyncMock(return_value=mock_tags)
         mock_repo.get_transaction_count = AsyncMock(return_value=0)
