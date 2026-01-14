@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query
@@ -15,6 +16,7 @@ from app.modules.analytics.schemas import (
 )
 from app.modules.analytics.service import AnalyticsService
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
 
@@ -40,8 +42,23 @@ async def get_category_breakdown(
 
     **Cached for 10 minutes.**
     """
-    service = AnalyticsService(db)
-    return await service.get_category_breakdown(current_user.id, start_date, end_date)
+    try:
+        service = AnalyticsService(db)
+        return await service.get_category_breakdown(current_user.id, start_date, end_date)
+    except Exception as e:
+        logger.error(
+            f"Error in get_category_breakdown for user {current_user.id}: {e}",
+            exc_info=True,
+        )
+        # Return empty response instead of 500 error
+        return CategoryBreakdownResponse(
+            expense_breakdown=[],
+            income_breakdown=[],
+            total_expense=0.0,
+            total_income=0.0,
+            period_start=start_date.isoformat(),
+            period_end=end_date.isoformat(),
+        )
 
 
 @router.get(
@@ -70,8 +87,27 @@ async def get_trends(
 
     **Cached for 10 minutes.**
     """
-    service = AnalyticsService(db)
-    return await service.get_trends(current_user.id, start_date, end_date, interval)
+    try:
+        service = AnalyticsService(db)
+        return await service.get_trends(current_user.id, start_date, end_date, interval)
+    except Exception as e:
+        logger.error(
+            f"Error in get_trends for user {current_user.id}: {e}",
+            exc_info=True,
+        )
+        # Return empty response instead of 500 error
+        from decimal import Decimal
+
+        return TrendsResponse(
+            data=[],
+            interval=interval,
+            period_start=start_date,
+            period_end=end_date,
+            total_income=Decimal(0),
+            total_expense=Decimal(0),
+            average_daily_expense=Decimal(0),
+            average_daily_income=Decimal(0),
+        )
 
 
 @router.get(
@@ -95,8 +131,21 @@ async def get_cash_flow(
 
     **Cached for 10 minutes.**
     """
-    service = AnalyticsService(db)
-    return await service.get_cash_flow(current_user.id, start_date, end_date, interval)
+    try:
+        service = AnalyticsService(db)
+        return await service.get_cash_flow(current_user.id, start_date, end_date, interval)
+    except Exception as e:
+        logger.error(
+            f"Error in get_cash_flow for user {current_user.id}: {e}",
+            exc_info=True,
+        )
+        # Return empty response instead of 500 error
+        return CashFlowResponse(
+            data_points=[],
+            interval=interval,
+            period_start=start_date.isoformat(),
+            period_end=end_date.isoformat(),
+        )
 
 
 @router.get(
@@ -126,8 +175,45 @@ async def get_dashboard_summary(
 
     This is the main dashboard endpoint - optimized for performance.
     """
-    service = AnalyticsService(db)
-    return await service.get_dashboard_summary(current_user.id, month)
+    try:
+        service = AnalyticsService(db)
+        return await service.get_dashboard_summary(current_user.id, month)
+    except Exception as e:
+        logger.error(
+            f"Error in get_dashboard_summary for user {current_user.id}: {e}",
+            exc_info=True,
+        )
+        # Return empty dashboard instead of 500 error
+        from datetime import UTC
+
+        from app.modules.analytics.schemas import MonthSummary
+
+        current_date = datetime.now(UTC)
+        current_month_key = f"{current_date.year}-{current_date.month:02d}"
+
+        return DashboardSummary(
+            current_month=MonthSummary(
+                month=current_month_key,
+                total_income=0.0,
+                total_expense=0.0,
+                net=0.0,
+                transaction_count=0,
+                income_count=0,
+                expense_count=0,
+                top_expense_category=None,
+                top_expense_amount=0.0,
+                top_income_category=None,
+                top_income_amount=0.0,
+                average_transaction=0.0,
+                days_with_transactions=0,
+            ),
+            previous_month=None,
+            year_to_date={"income": 0.0, "expense": 0.0, "net": 0.0},
+            recent_transactions=[],
+            top_expense_categories=[],
+            top_income_categories=[],
+            monthly_comparison={"expense_change_percentage": 0.0, "income_change_percentage": 0.0},
+        )
 
 
 @router.get(
@@ -149,5 +235,17 @@ async def get_tag_analytics(
 
     **Cached for 10 minutes.**
     """
-    service = AnalyticsService(db)
-    return await service.get_tag_analytics(current_user.id, start_date, end_date)
+    try:
+        service = AnalyticsService(db)
+        return await service.get_tag_analytics(current_user.id, start_date, end_date)
+    except Exception as e:
+        logger.error(
+            f"Error in get_tag_analytics for user {current_user.id}: {e}",
+            exc_info=True,
+        )
+        # Return empty response instead of 500 error
+        return TagAnalyticsResponse(
+            tags=[],
+            period_start=start_date.isoformat() if start_date else None,
+            period_end=end_date.isoformat() if end_date else None,
+        )

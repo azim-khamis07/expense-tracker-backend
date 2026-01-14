@@ -19,12 +19,18 @@ passlib = {extras = ["argon2"], version = "^1.7.4"}
 python-multipart = "^0.0.20"
 asyncpg = "^0.30.0"
 redis = "^5.2.1"
-celery = {extras = ["redis"], version = "^5.4.0"}
+celery = {extras = ["redis"], version = "^5.6.2"}
 boto3 = "^1.35.94"
 python-json-logger = "^4.0.0"
 email-validator = "^2.3.0"
 python-magic = "^0.4.27"
 pillow = "^12.1.0"
+flower = "^2.0.1"
+reportlab = "^4.4.7"
+matplotlib = "^3.10.8"
+sentry-sdk = {extras = ["fastapi"], version = "^2.49.0"}
+psutil = "^6.1.0"
+prometheus-client = "^0.21.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.4"
@@ -37,6 +43,10 @@ mypy = "^1.14.0"
 types-redis = "^4.6.0.20241004"
 faker = "^33.3.0"
 pre-commit = "^4.5.1"
+pytest-mock = "^3.15.1"
+freezegun = "^1.5.5"
+locust = "^2.43.0"
+safety = "^3.7.0"
 
 [tool.black]
 line-length = 100
@@ -46,13 +56,26 @@ include = '\.pyi?$'
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = ["tests"]
-pythonpath = ["."]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
 asyncio_mode = "auto"
 addopts = [
-    "--verbose",
+    "-v",
+    "--strict-markers",
     "--cov=app",
-    "--cov-report=term-missing",
     "--cov-report=html",
+    "--cov-report=term-missing",
+    "--cov-fail-under=80",
+]
+markers = [
+    "unit: Unit tests",
+    "integration: Integration tests",
+    "slow: Slow tests",
+    "auth: Authentication tests",
+    "transactions: Transaction tests",
+    "analytics: Analytics tests",
+    "reports: Report tests",
 ]
 
 [build-system]

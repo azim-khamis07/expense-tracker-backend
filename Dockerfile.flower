@@ -1,0 +1,74 @@
+# ============================================
+# Stage 1: Builder - Install dependencies
+# ============================================
+FROM python:3.11-slim as builder
+
+# Set working directory
+WORKDIR /build
+
+# Install system dependencies for building
+RUN apt-get update && apt-get install -y \
+    gcc \
+    postgresql-client \
+    libpq-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Poetry (latest version that supports package-mode)
+RUN pip install --no-cache-dir poetry>=1.8.0
+
+# Copy dependency files
+COPY pyproject.toml poetry.lock ./
+
+# Configure poetry to not create virtual env
+RUN poetry config virtualenvs.create false
+
+# Install dependencies (production only)
+RUN poetry install --without dev --no-interaction --no-ansi
+
+# ============================================
+# Stage 2: Runtime - Create Flower image
+# ============================================
+FROM python:3.11-slim
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Create non-root user
+RUN groupadd -r floweruser && useradd -r -g floweruser floweruser
+
+# Set working directory
+WORKDIR /app
+
+# Install runtime dependencies only
+RUN apt-get update && apt-get install -y \
+    postgresql-client \
+    libpq5 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy Python dependencies from builder
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+# Copy application code (minimal, just for Celery app config)
+COPY --chown=floweruser:floweruser app/infra/celery_app.py app/infra/
+COPY --chown=floweruser:floweruser app/core/config.py app/core/
+COPY --chown=floweruser:floweruser app/core/__init__.py app/core/
+COPY --chown=floweruser:floweruser app/infra/__init__.py app/infra/
+
+# Switch to non-root user
+USER floweruser
+
+# Expose Flower port
+EXPOSE 5555
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:5555 || exit 1
+
+# Default command: Flower monitoring
+CMD ["celery", "-A", "app.infra.celery_app", "flower", "--port=5555", "--broker_api=http://guest:guest@redis:6379/"]

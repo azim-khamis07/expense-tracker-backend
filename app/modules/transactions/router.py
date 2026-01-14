@@ -38,7 +38,7 @@ async def create_transaction(
     - **amount**: Positive decimal amount
     - **currency**: ISO 4217 code (default: USD)
     - **type**: 'expense' or 'income'
-    - **category_id**: Optional category ID
+    - **category_id**: Category ID (required) - must belong to the user
     - **occurred_at**: When transaction occurred (ISO 8601)
     - **tag_ids**: Optional list of tag IDs
     """

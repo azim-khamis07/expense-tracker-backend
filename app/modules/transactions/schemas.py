@@ -19,7 +19,7 @@ class TransactionCreate(BaseModel):
         default="USD", min_length=3, max_length=3, description="ISO 4217 currency code"
     )
     type: str = Field(..., description="Transaction type (expense or income)")
-    category_id: str | None = Field(None, description="Category ID")
+    category_id: str = Field(..., min_length=1, description="Category ID (required)")
     description: str | None = Field(None, max_length=1000, description="Transaction description")
     note: str | None = Field(None, max_length=1000, description="Additional notes")
     occurred_at: datetime = Field(..., description="When transaction occurred (ISO 8601)")
@@ -38,6 +38,14 @@ class TransactionCreate(BaseModel):
     def validate_currency(cls, v: str) -> str:
         """Validate currency code."""
         return v.upper()
+
+    @field_validator("category_id")
+    @classmethod
+    def validate_category_id(cls, v: str) -> str:
+        """Validate category ID is not empty."""
+        if not v or not v.strip():
+            raise ValueError("Category ID is required and cannot be empty")
+        return v.strip()
 
 
 class TransactionUpdate(BaseModel):

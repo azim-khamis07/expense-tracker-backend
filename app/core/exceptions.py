@@ -96,11 +96,29 @@ class InternalServerException(BaseAPIException):
 # Exception handlers for FastAPI
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """Handle Pydantic validation errors."""
+    # Convert errors to JSON-serializable format
+    errors = exc.errors()
+    serializable_errors = []
+    for error in errors:
+        serializable_error = {}
+        for key, value in error.items():
+            # Convert any non-serializable objects to strings
+            try:
+                # Try to serialize to check if it's JSON-serializable
+                import json
+
+                json.dumps(value)
+                serializable_error[key] = value
+            except (TypeError, ValueError):
+                # If not serializable, convert to string
+                serializable_error[key] = str(value)
+        serializable_errors.append(serializable_error)
+
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={
             "error": "Validation Error",
-            "detail": exc.errors(),
+            "detail": serializable_errors,
             "request_id": (
                 request.state.request_id if hasattr(request.state, "request_id") else None
             ),

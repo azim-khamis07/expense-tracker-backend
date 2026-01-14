@@ -2,27 +2,31 @@ import logging
 import time
 import uuid
 from collections.abc import Callable
+from contextvars import ContextVar
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
 logger = logging.getLogger(__name__)
 
+# Context variable for request ID
+request_id_var: ContextVar[str] = ContextVar("request_id", default="")
+
 
 class RequestIDMiddleware(BaseHTTPMiddleware):
-    """Middleware to add request ID to each request."""
+    """Add unique request ID to each request"""
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        # Generate or extract request ID from headers
-        request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+        request_id = str(uuid.uuid4())
+        request_id_var.set(request_id)
 
-        # Add request ID to request state
+        # Add to request state
         request.state.request_id = request_id
 
         # Process request
         response = await call_next(request)
 
-        # Add request ID to response headers
+        # Add to response headers
         response.headers["X-Request-ID"] = request_id
 
         return response
@@ -51,53 +55,58 @@ class TimingMiddleware(BaseHTTPMiddleware):
 
 
 class LoggingMiddleware(BaseHTTPMiddleware):
-    """Middleware to log all HTTP requests."""
+    """Log all requests with timing"""
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        # Get request ID if available
-        request_id = getattr(request.state, "request_id", None)
+        request_id = getattr(request.state, "request_id", "unknown")
 
-        # Log request start
+        start_time = time.time()
+
+        # Log request
         logger.info(
-            f"Request started: {request.method} {request.url.path}",
-            extra={"request_id": request_id, "method": request.method, "path": request.url.path},
+            "Request started",
+            extra={
+                "request_id": request_id,
+                "method": request.method,
+                "path": request.url.path,
+                "client_ip": request.client.host if request.client else None,
+                "user_agent": request.headers.get("user-agent"),
+            },
         )
 
         # Process request
-        start_time = time.time()
         try:
             response = await call_next(request)
-            status_code = response.status_code
-            process_time = time.time() - start_time
 
-            # Log successful request
+            # Calculate duration
+            duration = time.time() - start_time
+
+            # Log response
             logger.info(
-                f"Request completed: {request.method} {request.url.path} - {status_code}",
+                "Request completed",
                 extra={
                     "request_id": request_id,
                     "method": request.method,
                     "path": request.url.path,
-                    "status_code": status_code,
-                    "process_time": process_time,
+                    "status_code": response.status_code,
+                    "duration_ms": round(duration * 1000, 2),
                 },
             )
 
             return response
 
-        except Exception as e:
-            process_time = time.time() - start_time
+        except Exception as exc:
+            duration = time.time() - start_time
 
-            # Log failed request
             logger.error(
-                f"Request failed: {request.method} {request.url.path} - {str(e)}",
+                "Request failed",
                 extra={
                     "request_id": request_id,
                     "method": request.method,
                     "path": request.url.path,
-                    "process_time": process_time,
-                    "error": str(e),
+                    "duration_ms": round(duration * 1000, 2),
+                    "error": str(exc),
                 },
                 exc_info=True,
             )
-
             raise

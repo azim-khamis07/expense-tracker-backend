@@ -54,8 +54,15 @@ async def get_or_compute(
             # Mark as computing
             await redis_client.set(computing_key, "1", ex=30)
 
-            # Compute value
-            result = await compute_fn()
+            # Compute value (catch errors here to prevent cache stampede retries)
+            try:
+                result = await compute_fn()
+            except Exception as e:
+                logger.error(
+                    f"Error in compute function for cache key {cache_key}: {e}", exc_info=True
+                )
+                # Re-raise to let caller handle it, but release lock first
+                raise
 
             # Store in cache
             if result is not None:
@@ -91,7 +98,14 @@ async def get_or_compute(
 
         # Timeout or computation failed - compute ourselves
         logger.warning(f"Timeout waiting for {cache_key} - Computing anyway")
-        result = await compute_fn()
+        try:
+            result = await compute_fn()
+        except Exception as e:
+            logger.error(
+                f"Error computing value after timeout for cache key {cache_key}: {e}", exc_info=True
+            )
+            # Re-raise to let caller handle it
+            raise
 
         # Try to cache (best effort)
         if result is not None:

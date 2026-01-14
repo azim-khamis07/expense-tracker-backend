@@ -12,7 +12,8 @@ from app.core.exceptions import (
     integrity_error_handler,
     validation_exception_handler,
 )
-from app.core.logging_config import setup_logging
+from app.core.logging import setup_logging
+from app.core.metrics import PrometheusMiddleware
 from app.core.middleware import LoggingMiddleware, RequestIDMiddleware, TimingMiddleware
 from app.db.session import engine
 from app.infra.redis import redis_client
@@ -21,7 +22,9 @@ from app.infra.redis import redis_client
 from app.modules.analytics.router import router as analytics_router
 from app.modules.auth.router import router as auth_router
 from app.modules.categories.router import router as categories_router
+from app.modules.monitoring.router import router as monitoring_router
 from app.modules.receipts.router import router as receipts_router
+from app.modules.reports.router import router as reports_router
 from app.modules.tags.router import router as tags_router
 from app.modules.transactions.router import router as transactions_router
 from app.modules.users.router import router as users_router
@@ -33,8 +36,8 @@ logger = logging.getLogger(__name__)
 # Create FastAPI app instance
 app = FastAPI(
     title=settings.APP_NAME,
-    description="Production-grade expense tracking API with receipts",
-    version="0.5.0",
+    description="Production-grade expense tracking API with receipts and async PDF reports",
+    version="0.6.0",
     docs_url=f"{settings.api_prefix}/docs",
     redoc_url=f"{settings.api_prefix}/redoc",
     openapi_url=f"{settings.api_prefix}/openapi.json",
@@ -44,14 +47,17 @@ app = FastAPI(
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(TimingMiddleware)
 app.add_middleware(LoggingMiddleware)
+app.add_middleware(PrometheusMiddleware)
 
 # Configure CORS
+# Note: CORS middleware must be added before other middleware to handle preflight requests
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Request-ID", "X-Process-Time"],
 )
 
 # Register exception handlers
@@ -67,12 +73,14 @@ app.include_router(tags_router, prefix=settings.api_prefix)
 app.include_router(transactions_router, prefix=settings.api_prefix)
 app.include_router(analytics_router, prefix=settings.api_prefix)
 app.include_router(receipts_router, prefix=settings.api_prefix)
+app.include_router(reports_router, prefix=settings.api_prefix)
+app.include_router(monitoring_router, prefix=settings.api_prefix)
 
 
 @app.on_event("startup")
 async def startup_event():
     """Run on application startup."""
-    logger.info(f"Starting {settings.APP_NAME} v0.5.0 in {settings.ENVIRONMENT} mode")
+    logger.info(f"Starting {settings.APP_NAME} v0.6.0 in {settings.ENVIRONMENT} mode")
 
     # Initialize Redis
     try:
@@ -120,7 +128,7 @@ async def health_check(request: Request):
     return {
         "status": overall_status,
         "environment": settings.ENVIRONMENT,
-        "version": "0.5.0",
+        "version": "0.6.0",
         "request_id": getattr(request.state, "request_id", None),
         "checks": {
             "database": "healthy" if db_healthy else "unhealthy",
@@ -147,5 +155,7 @@ async def api_root():
             "Tag Analytics",
             "Receipt Upload & Management",
             "S3 Storage with Presigned URLs",
+            "Async PDF Report Generation",
+            "Celery Background Jobs",
         ],
     }

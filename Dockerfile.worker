@@ -1,0 +1,77 @@
+# ============================================
+# Stage 1: Builder - Install dependencies
+# ============================================
+FROM python:3.11-slim as builder
+
+# Set working directory
+WORKDIR /build
+
+# Install system dependencies for building
+RUN apt-get update && apt-get install -y \
+    gcc \
+    postgresql-client \
+    libpq-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Poetry (latest version that supports package-mode)
+RUN pip install --no-cache-dir poetry>=1.8.0
+
+# Copy dependency files
+COPY pyproject.toml poetry.lock ./
+
+# Configure poetry to not create virtual env
+RUN poetry config virtualenvs.create false
+
+# Install dependencies (production only)
+RUN poetry install --without dev --no-interaction --no-ansi
+
+# ============================================
+# Stage 2: Runtime - Create worker image
+# ============================================
+FROM python:3.11-slim
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    CELERY_BROKER_URL=redis://redis:6379/0 \
+    CELERY_RESULT_BACKEND=redis://redis:6379/0
+
+# Create non-root user
+RUN groupadd -r celeryuser && useradd -r -g celeryuser celeryuser
+
+# Set working directory
+WORKDIR /app
+
+# Install runtime dependencies only
+RUN apt-get update && apt-get install -y \
+    postgresql-client \
+    libpq5 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy Python dependencies from builder
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+# Copy application code
+COPY --chown=celeryuser:celeryuser . .
+
+# Create necessary directories
+RUN mkdir -p /app/logs && \
+    chown -R celeryuser:celeryuser /app
+
+# Switch to non-root user
+USER celeryuser
+
+# Health check (Celery worker health)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD celery -A app.infra.celery_app inspect ping -d celery@$(hostname) || exit 1
+
+# Default command: Celery worker
+# -Q reports: Only process reports queue
+# --concurrency=4: Number of worker processes
+# --loglevel=info: Logging level
+CMD ["celery", "-A", "app.infra.celery_app", "worker", "--loglevel=info", "-Q", "reports", "--concurrency=4"]

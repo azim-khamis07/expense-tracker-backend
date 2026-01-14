@@ -19,7 +19,7 @@ from app.modules.analytics.schemas import (
     TrendsResponse,
 )
 from app.modules.transactions.repo import TransactionRepository
-from app.utils.datetime_utils import end_of_month, format_month_key, start_of_month
+from app.utils.datetime import end_of_month, format_month_key, start_of_month
 
 logger = logging.getLogger(__name__)
 
@@ -45,43 +45,61 @@ class AnalyticsService:
         cache_key = f"analytics:breakdown:{user_id}:{start_date.date()}:{end_date.date()}"
 
         async def compute():
-            # Get breakdown data
-            breakdown = await self.repo.get_category_breakdown(user_id, start_date, end_date)
+            try:
+                # Get breakdown data
+                breakdown = await self.repo.get_category_breakdown(user_id, start_date, end_date)
 
-            # Separate by type and calculate percentages
-            expense_items = [b for b in breakdown if b["type"] == "expense"]
-            income_items = [b for b in breakdown if b["type"] == "income"]
+                # Separate by type and calculate percentages
+                expense_items = [b for b in breakdown if b.get("type") == "expense"]
+                income_items = [b for b in breakdown if b.get("type") == "income"]
 
-            total_expense = sum(b["amount"] for b in expense_items)
-            total_income = sum(b["amount"] for b in income_items)
+                total_expense = sum(b.get("amount", Decimal(0)) for b in expense_items)
+                total_income = sum(b.get("amount", Decimal(0)) for b in income_items)
 
-            # Calculate percentages
-            expense_breakdown = []
-            for item in expense_items:
-                percentage = (
-                    (item["amount"] / total_expense * 100) if total_expense > 0 else Decimal(0)
+                # Calculate percentages
+                expense_breakdown = []
+                for item in expense_items:
+                    percentage = (
+                        (item["amount"] / total_expense * 100) if total_expense > 0 else Decimal(0)
+                    )
+                    breakdown_dict = CategoryBreakdown(**item, percentage=percentage).model_dump()
+                    # Convert Decimal to float for JSON serialization
+                    breakdown_dict["amount"] = float(breakdown_dict["amount"])
+                    breakdown_dict["percentage"] = float(breakdown_dict["percentage"])
+                    expense_breakdown.append(breakdown_dict)
+
+                income_breakdown = []
+                for item in income_items:
+                    percentage = (
+                        (item["amount"] / total_income * 100) if total_income > 0 else Decimal(0)
+                    )
+                    breakdown_dict = CategoryBreakdown(**item, percentage=percentage).model_dump()
+                    # Convert Decimal to float for JSON serialization
+                    breakdown_dict["amount"] = float(breakdown_dict["amount"])
+                    breakdown_dict["percentage"] = float(breakdown_dict["percentage"])
+                    income_breakdown.append(breakdown_dict)
+
+                return {
+                    "expense_breakdown": expense_breakdown,
+                    "income_breakdown": income_breakdown,
+                    "total_expense": float(total_expense),
+                    "total_income": float(total_income),
+                    "period_start": start_date.isoformat(),
+                    "period_end": end_date.isoformat(),
+                }
+            except Exception as e:
+                logger.error(
+                    f"Error computing category breakdown for user {user_id}: {e}", exc_info=True
                 )
-                expense_breakdown.append(
-                    CategoryBreakdown(**item, percentage=percentage).model_dump()
-                )
-
-            income_breakdown = []
-            for item in income_items:
-                percentage = (
-                    (item["amount"] / total_income * 100) if total_income > 0 else Decimal(0)
-                )
-                income_breakdown.append(
-                    CategoryBreakdown(**item, percentage=percentage).model_dump()
-                )
-
-            return {
-                "expense_breakdown": expense_breakdown,
-                "income_breakdown": income_breakdown,
-                "total_expense": float(total_expense),
-                "total_income": float(total_income),
-                "period_start": start_date.isoformat(),
-                "period_end": end_date.isoformat(),
-            }
+                # Return empty breakdown instead of raising
+                return {
+                    "expense_breakdown": [],
+                    "income_breakdown": [],
+                    "total_expense": 0.0,
+                    "total_income": 0.0,
+                    "period_start": start_date.isoformat(),
+                    "period_end": end_date.isoformat(),
+                }
 
         # Get from cache or compute
         data = await get_or_compute(cache_key, compute, ttl=600)
@@ -110,28 +128,42 @@ class AnalyticsService:
         cache_key = f"analytics:trends:{user_id}:{start_date.date()}:{end_date.date()}:{interval}"
 
         async def compute():
-            # Get time series data
-            data = await self.repo.get_time_series_data(user_id, start_date, end_date, interval)
+            try:
+                # Get time series data
+                data = await self.repo.get_time_series_data(user_id, start_date, end_date, interval)
 
-            # Calculate totals
-            total_income = sum(d["income"] for d in data)
-            total_expense = sum(d["expense"] for d in data)
+                # Calculate totals
+                total_income = sum(d.get("income", Decimal(0)) for d in data)
+                total_expense = sum(d.get("expense", Decimal(0)) for d in data)
 
-            # Calculate averages
-            days_count = (end_date - start_date).days + 1
-            avg_daily_expense = total_expense / days_count if days_count > 0 else Decimal(0)
-            avg_daily_income = total_income / days_count if days_count > 0 else Decimal(0)
+                # Calculate averages
+                days_count = (end_date - start_date).days + 1
+                avg_daily_expense = total_expense / days_count if days_count > 0 else Decimal(0)
+                avg_daily_income = total_income / days_count if days_count > 0 else Decimal(0)
 
-            return {
-                "data": data,
-                "interval": interval,
-                "period_start": start_date.isoformat(),
-                "period_end": end_date.isoformat(),
-                "total_income": float(total_income),
-                "total_expense": float(total_expense),
-                "average_daily_expense": float(avg_daily_expense),
-                "average_daily_income": float(avg_daily_income),
-            }
+                return {
+                    "data": data,
+                    "interval": interval,
+                    "period_start": start_date.isoformat(),
+                    "period_end": end_date.isoformat(),
+                    "total_income": float(total_income),
+                    "total_expense": float(total_expense),
+                    "average_daily_expense": float(avg_daily_expense),
+                    "average_daily_income": float(avg_daily_income),
+                }
+            except Exception as e:
+                logger.error(f"Error computing trends for user {user_id}: {e}", exc_info=True)
+                # Return empty trends instead of raising
+                return {
+                    "data": [],
+                    "interval": interval,
+                    "period_start": start_date.isoformat(),
+                    "period_end": end_date.isoformat(),
+                    "total_income": 0.0,
+                    "total_expense": 0.0,
+                    "average_daily_expense": 0.0,
+                    "average_daily_income": 0.0,
+                }
 
         # Get from cache or compute
         cached_data = await get_or_compute(cache_key, compute, ttl=600)
@@ -371,13 +403,24 @@ class AnalyticsService:
         cache_key = f"analytics:tags:{user_id}:{start_str}:{end_str}"
 
         async def compute():
-            analytics = await self.repo.get_tag_analytics(user_id, start_date, end_date)
+            try:
+                analytics = await self.repo.get_tag_analytics(user_id, start_date, end_date)
 
-            return {
-                "tags": analytics,
-                "period_start": start_date.isoformat() if start_date else None,
-                "period_end": end_date.isoformat() if end_date else None,
-            }
+                return {
+                    "tags": analytics,
+                    "period_start": start_date.isoformat() if start_date else None,
+                    "period_end": end_date.isoformat() if end_date else None,
+                }
+            except Exception as e:
+                logger.error(
+                    f"Error computing tag analytics for user {user_id}: {e}", exc_info=True
+                )
+                # Return empty tag analytics instead of raising
+                return {
+                    "tags": [],
+                    "period_start": start_date.isoformat() if start_date else None,
+                    "period_end": end_date.isoformat() if end_date else None,
+                }
 
         # Get from cache or compute
         cached_data = await get_or_compute(cache_key, compute, ttl=600)

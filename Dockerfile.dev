@@ -1,0 +1,34 @@
+# Development Dockerfile
+# For local development with hot-reload
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    postgresql-client \
+    libpq-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Poetry (latest version that supports package-mode)
+RUN pip install --no-cache-dir poetry>=1.8.0
+
+# Copy dependency files
+COPY pyproject.toml poetry.lock ./
+
+# Configure poetry
+RUN poetry config virtualenvs.create false
+
+# Install all dependencies (including dev)
+RUN poetry install --no-interaction --no-ansi
+
+# Copy application code
+COPY . .
+
+# Expose port
+EXPOSE 8000
+
+# Run with reload for development
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

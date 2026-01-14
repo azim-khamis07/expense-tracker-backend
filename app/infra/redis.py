@@ -98,11 +98,26 @@ class RedisClient:
         return None
 
     async def set_json(self, key: str, value: Any, ex: int | None = None) -> bool:
-        """Set JSON value."""
+        """Set JSON value with automatic Decimal to float conversion."""
         try:
-            json_value = json.dumps(value)
+            # Convert Decimal objects to float for JSON serialization
+            from decimal import Decimal
+
+            def decimal_to_float(obj):
+                """Recursively convert Decimal to float."""
+                if isinstance(obj, Decimal):
+                    return float(obj)
+                elif isinstance(obj, dict):
+                    return {k: decimal_to_float(v) for k, v in obj.items()}
+                elif isinstance(obj, list):
+                    return [decimal_to_float(item) for item in obj]
+                return obj
+
+            # Convert all Decimals to floats
+            serializable_value = decimal_to_float(value)
+            json_value = json.dumps(serializable_value)
             return await self.set(key, json_value, ex=ex)
-        except (TypeError, json.JSONEncodeError) as e:
+        except TypeError as e:
             logger.error(f"Failed to encode JSON for key {key}: {e}")
             return False
 

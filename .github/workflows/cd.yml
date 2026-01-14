@@ -1,0 +1,78 @@
+name: CD - Deploy (Generic)
+
+on:
+  push:
+    branches: [staging]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - development
+
+env:
+  PYTHON_VERSION: '3.11'
+  POETRY_VERSION: '1.8.0'
+
+jobs:
+  # ============================================
+  # Deploy to Production
+  # ============================================
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    environment: production
+    if: github.ref == 'refs/heads/production' || github.event.inputs.environment == 'production'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Deploy to server
+        run: |
+          echo "🚀 Deploying to production server..."
+          # Add your deployment commands here
+          # Example:
+          # ssh user@server "cd /app && git pull && docker-compose -f docker-compose.prod.yml up -d --build"
+
+      - name: Run database migrations
+        run: |
+          echo "📊 Running database migrations..."
+          # ssh user@server "./scripts/migrate_docker.sh"
+
+      - name: Health check
+        run: |
+          echo "🏥 Checking application health..."
+          # curl -f https://yourdomain.com/health || exit 1
+
+  # ============================================
+  # Deploy to Staging
+  # ============================================
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    environment: staging
+    if: github.ref == 'refs/heads/stage' || github.event.inputs.environment == 'staging'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY_STAGING }}
+
+      - name: Deploy to staging server
+        run: |
+          echo "🚀 Deploying to staging server..."
+          # Add your deployment commands here

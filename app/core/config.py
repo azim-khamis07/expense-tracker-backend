@@ -51,6 +51,9 @@ class Settings(BaseSettings):
 
     # Rate Limiting
     RATE_LIMIT_PER_MINUTE: int = 60
+    DISABLE_RATE_LIMITS_IN_TEST: bool = False
+    TEST_MODE: bool = False
+    RATE_LIMIT_MULTIPLIER: float = 1.0  # Multiply rate limits in test mode
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True, extra="ignore")
 

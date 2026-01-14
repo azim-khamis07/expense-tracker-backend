@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.category import Category
 from app.models.tag import Tag, transaction_tags
 from app.models.transaction import Transaction
-from app.utils.datetime_utils import end_of_month
+from app.utils.datetime import end_of_month
 
 logger = logging.getLogger(__name__)
 
@@ -193,18 +193,80 @@ class AnalyticsRepository:
         month: int,
     ) -> dict:
         """Get comprehensive summary for a specific month."""
-        start = datetime(year, month, 1, tzinfo=UTC)
-        end = end_of_month(start)
+        try:
+            start = datetime(year, month, 1, tzinfo=UTC)
+            end = end_of_month(start)
 
-        # Get basic stats
-        stats_query = (
-            select(
-                Transaction.type,
-                func.sum(Transaction.amount).label("total"),
-                func.count(Transaction.id).label("count"),
-                func.avg(Transaction.amount).label("average"),
+            # Get basic stats
+            stats_query = (
+                select(
+                    Transaction.type,
+                    func.sum(Transaction.amount).label("total"),
+                    func.count(Transaction.id).label("count"),
+                    func.avg(Transaction.amount).label("average"),
+                )
+                .where(
+                    and_(
+                        Transaction.user_id == user_id,
+                        Transaction.deleted_at.is_(None),
+                        Transaction.occurred_at >= start,
+                        Transaction.occurred_at <= end,
+                    )
+                )
+                .group_by(Transaction.type)
             )
-            .where(
+
+            result = await self.db.execute(stats_query)
+            stats = {row.type: row for row in result}
+
+            income_stats = stats.get("income")
+            expense_stats = stats.get("expense")
+
+            total_income = Decimal(str(income_stats.total)) if income_stats else Decimal(0)
+            total_expense = Decimal(str(expense_stats.total)) if expense_stats else Decimal(0)
+            income_count = income_stats.count if income_stats else 0
+            expense_count = expense_stats.count if expense_stats else 0
+
+            # Get top expense category
+            top_expense = await self.db.execute(
+                select(Category.name, func.sum(Transaction.amount).label("amount"))
+                .join(Category, Category.id == Transaction.category_id)
+                .where(
+                    and_(
+                        Transaction.user_id == user_id,
+                        Transaction.deleted_at.is_(None),
+                        Transaction.type == "expense",
+                        Transaction.occurred_at >= start,
+                        Transaction.occurred_at <= end,
+                    )
+                )
+                .group_by(Category.name)
+                .order_by(func.sum(Transaction.amount).desc())
+                .limit(1)
+            )
+            top_expense_row = top_expense.first()
+
+            # Get top income category
+            top_income = await self.db.execute(
+                select(Category.name, func.sum(Transaction.amount).label("amount"))
+                .join(Category, Category.id == Transaction.category_id)
+                .where(
+                    and_(
+                        Transaction.user_id == user_id,
+                        Transaction.deleted_at.is_(None),
+                        Transaction.type == "income",
+                        Transaction.occurred_at >= start,
+                        Transaction.occurred_at <= end,
+                    )
+                )
+                .group_by(Category.name)
+                .order_by(func.sum(Transaction.amount).desc())
+                .limit(1)
+            )
+            top_income_row = top_income.first()
+
+            # Get days with transactions
+            days_query = select(func.count(distinct(func.date(Transaction.occurred_at)))).where(
                 and_(
                     Transaction.user_id == user_id,
                     Transaction.deleted_at.is_(None),
@@ -212,93 +274,53 @@ class AnalyticsRepository:
                     Transaction.occurred_at <= end,
                 )
             )
-            .group_by(Transaction.type)
-        )
+            days_result = await self.db.execute(days_query)
+            days_with_transactions = days_result.scalar_one() or 0
 
-        result = await self.db.execute(stats_query)
-        stats = {row.type: row for row in result}
+            total_count = income_count + expense_count
 
-        income_stats = stats.get("income")
-        expense_stats = stats.get("expense")
-
-        total_income = Decimal(str(income_stats.total)) if income_stats else Decimal(0)
-        total_expense = Decimal(str(expense_stats.total)) if expense_stats else Decimal(0)
-        income_count = income_stats.count if income_stats else 0
-        expense_count = expense_stats.count if expense_stats else 0
-
-        # Get top expense category
-        top_expense = await self.db.execute(
-            select(Category.name, func.sum(Transaction.amount).label("amount"))
-            .join(Category, Category.id == Transaction.category_id)
-            .where(
-                and_(
-                    Transaction.user_id == user_id,
-                    Transaction.deleted_at.is_(None),
-                    Transaction.type == "expense",
-                    Transaction.occurred_at >= start,
-                    Transaction.occurred_at <= end,
-                )
+            return {
+                "month": f"{year}-{month:02d}",
+                "total_income": total_income,
+                "total_expense": total_expense,
+                "net": total_income - total_expense,
+                "transaction_count": total_count,
+                "income_count": income_count,
+                "expense_count": expense_count,
+                "top_expense_category": top_expense_row.name if top_expense_row else None,
+                "top_expense_amount": (
+                    Decimal(str(top_expense_row.amount)) if top_expense_row else Decimal(0)
+                ),
+                "top_income_category": top_income_row.name if top_income_row else None,
+                "top_income_amount": (
+                    Decimal(str(top_income_row.amount)) if top_income_row else Decimal(0)
+                ),
+                "average_transaction": (
+                    (total_income + total_expense) / total_count if total_count > 0 else Decimal(0)
+                ),
+                "days_with_transactions": days_with_transactions,
+            }
+        except Exception as e:
+            logger.error(
+                f"Error getting month summary for user {user_id}, {year}-{month:02d}: {e}",
+                exc_info=True,
             )
-            .group_by(Category.name)
-            .order_by(func.sum(Transaction.amount).desc())
-            .limit(1)
-        )
-        top_expense_row = top_expense.first()
-
-        # Get top income category
-        top_income = await self.db.execute(
-            select(Category.name, func.sum(Transaction.amount).label("amount"))
-            .join(Category, Category.id == Transaction.category_id)
-            .where(
-                and_(
-                    Transaction.user_id == user_id,
-                    Transaction.deleted_at.is_(None),
-                    Transaction.type == "income",
-                    Transaction.occurred_at >= start,
-                    Transaction.occurred_at <= end,
-                )
-            )
-            .group_by(Category.name)
-            .order_by(func.sum(Transaction.amount).desc())
-            .limit(1)
-        )
-        top_income_row = top_income.first()
-
-        # Get days with transactions
-        days_query = select(func.count(distinct(func.date(Transaction.occurred_at)))).where(
-            and_(
-                Transaction.user_id == user_id,
-                Transaction.deleted_at.is_(None),
-                Transaction.occurred_at >= start,
-                Transaction.occurred_at <= end,
-            )
-        )
-        days_result = await self.db.execute(days_query)
-        days_with_transactions = days_result.scalar_one()
-
-        total_count = income_count + expense_count
-
-        return {
-            "month": f"{year}-{month:02d}",
-            "total_income": total_income,
-            "total_expense": total_expense,
-            "net": total_income - total_expense,
-            "transaction_count": total_count,
-            "income_count": income_count,
-            "expense_count": expense_count,
-            "top_expense_category": top_expense_row.name if top_expense_row else None,
-            "top_expense_amount": (
-                Decimal(str(top_expense_row.amount)) if top_expense_row else Decimal(0)
-            ),
-            "top_income_category": top_income_row.name if top_income_row else None,
-            "top_income_amount": (
-                Decimal(str(top_income_row.amount)) if top_income_row else Decimal(0)
-            ),
-            "average_transaction": (
-                (total_income + total_expense) / total_count if total_count > 0 else Decimal(0)
-            ),
-            "days_with_transactions": days_with_transactions,
-        }
+            # Return empty/default summary instead of raising
+            return {
+                "month": f"{year}-{month:02d}",
+                "total_income": Decimal(0),
+                "total_expense": Decimal(0),
+                "net": Decimal(0),
+                "transaction_count": 0,
+                "income_count": 0,
+                "expense_count": 0,
+                "top_expense_category": None,
+                "top_expense_amount": Decimal(0),
+                "top_income_category": None,
+                "top_income_amount": Decimal(0),
+                "average_transaction": Decimal(0),
+                "days_with_transactions": 0,
+            }
 
     async def get_year_to_date_stats(
         self,

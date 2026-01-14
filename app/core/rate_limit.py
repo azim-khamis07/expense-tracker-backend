@@ -73,6 +73,9 @@ def rate_limit_by_ip(
     """
     Factory function to create a rate limit dependency by IP address.
 
+    Respects TEST_MODE and DISABLE_RATE_LIMITS_IN_TEST settings.
+    In test mode, rate limits can be disabled or multiplied.
+
     Usage:
         @app.post("/endpoint")
         async def endpoint(
@@ -81,12 +84,26 @@ def rate_limit_by_ip(
         ):
             ...
     """
+    from app.core.config import settings
 
     async def rate_limit_dependency(request: Request) -> None:
+        # Skip rate limiting in test mode if disabled
+        if settings.DISABLE_RATE_LIMITS_IN_TEST and settings.TEST_MODE:
+            logger.debug("Rate limiting disabled in test mode")
+            return
+
+        # Apply multiplier in test mode
+        effective_max_requests = max_requests
+        if settings.TEST_MODE and settings.RATE_LIMIT_MULTIPLIER > 1.0:
+            effective_max_requests = int(max_requests * settings.RATE_LIMIT_MULTIPLIER)
+            logger.debug(
+                f"Rate limit multiplied in test mode: {max_requests} -> {effective_max_requests}"
+            )
+
         client_ip = request.client.host if request.client else "unknown"
         endpoint = request.url.path
         key = f"{endpoint}:{client_ip}"
-        await check_rate_limit(key, max_requests, window_seconds)
+        await check_rate_limit(key, effective_max_requests, window_seconds)
 
     return rate_limit_dependency
 

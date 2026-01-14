@@ -18,7 +18,7 @@ from app.modules.transactions.schemas import (
     TransactionStats,
     TransactionUpdate,
 )
-from app.utils.datetime_utils import format_month_key, to_utc
+from app.utils.datetime import format_month_key, to_utc
 
 logger = logging.getLogger(__name__)
 
@@ -35,11 +35,10 @@ class TransactionService:
         self, user_id: str, data: TransactionCreate
     ) -> TransactionResponse:
         """Create new transaction."""
-        # Validate category belongs to user (if provided)
-        if data.category_id:
-            category = await self.category_repo.get_by_id(data.category_id, user_id)
-            if not category:
-                raise ValidationException("Category not found")
+        # Validate category belongs to user (required)
+        category = await self.category_repo.get_by_id(data.category_id, user_id)
+        if not category:
+            raise ValidationException("Category not found or does not belong to user")
 
         # Normalize occurred_at to UTC
         occurred_at = to_utc(data.occurred_at)
@@ -262,8 +261,28 @@ class TransactionService:
         )
 
     async def _invalidate_cache(self, user_id: str, occurred_at: datetime) -> None:
-        """Invalidate cache for transaction month."""
+        """Invalidate all analytics caches for user after transaction change."""
         month_key = format_month_key(occurred_at)
-        pattern = f"dash:{user_id}:{month_key}*"
-        await invalidate_cache_pattern(pattern)
-        logger.debug(f"Invalidated cache: {pattern}")
+
+        # Invalidate dashboard cache for the month of the transaction
+        dashboard_pattern = f"dash:{user_id}:{month_key}*"
+        await invalidate_cache_pattern(dashboard_pattern)
+
+        # Invalidate all analytics caches for this user
+        # This includes: category-breakdown, trends, cashflow, tag-analytics
+        analytics_pattern = f"analytics:*:{user_id}:*"
+        await invalidate_cache_pattern(analytics_pattern)
+
+        # Also invalidate cache for previous month (for month-over-month comparison)
+        from datetime import timedelta
+
+        prev_month_date = occurred_at - timedelta(days=1)
+        prev_month_key = format_month_key(prev_month_date)
+        if prev_month_key != month_key:
+            prev_dashboard_pattern = f"dash:{user_id}:{prev_month_key}*"
+            await invalidate_cache_pattern(prev_dashboard_pattern)
+
+        logger.info(
+            f"Invalidated analytics cache for user {user_id}, "
+            f"month {month_key} (and previous month if different)"
+        )
