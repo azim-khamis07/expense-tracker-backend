@@ -135,11 +135,16 @@ jobs:
 
       - name: Update ECS Task Definition
         run: |
-          aws ecs describe-task-definition \
+          if aws ecs describe-task-definition \
             --task-definition expense-tracker-api-dev \
-            --query taskDefinition > task-definition.json || \
-          echo "Task definition not found, creating empty file"
-          echo '{"containerDefinitions":[]}' > task-definition.json
+            --query taskDefinition \
+            --output json > task-definition.json; then
+            echo "✅ Task definition fetched successfully"
+            echo "Container definitions: $(jq '.containerDefinitions | length' task-definition.json)"
+          else
+            echo "❌ Failed to fetch task definition"
+            exit 1
+          fi
 
       - name: Render ECS Task Definition
         id: task-def
