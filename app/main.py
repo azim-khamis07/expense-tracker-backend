@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from fastapi import FastAPI, Request
@@ -104,21 +105,30 @@ async def shutdown_event():
 
 @app.get("/health")
 async def health_check(request: Request):
-    """Health check endpoint with dependency checks."""
-    # Check Redis
+    """Health check endpoint with dependency checks and timeouts."""
+    # Check Redis with timeout (1.5 seconds)
     redis_healthy = False
     try:
-        await redis_client.redis.ping()
-        redis_healthy = True
+        if redis_client.redis:
+            await asyncio.wait_for(redis_client.redis.ping(), timeout=1.5)
+            redis_healthy = True
+    except TimeoutError:
+        logger.warning("Redis health check timed out")
     except Exception as e:
         logger.error(f"Redis health check failed: {e}")
 
-    # Check Database
+    # Check Database with timeout (1.5 seconds)
     db_healthy = False
     try:
-        async with engine.connect() as conn:
-            await conn.execute(text("SELECT 1"))
+
+        async def db_check():
+            async with engine.connect() as conn:
+                await conn.execute(text("SELECT 1"))
+
+        await asyncio.wait_for(db_check(), timeout=1.5)
         db_healthy = True
+    except TimeoutError:
+        logger.warning("Database health check timed out")
     except Exception as e:
         logger.error(f"Database health check failed: {e}")
 
