@@ -323,7 +323,7 @@ resource "aws_ecs_cluster_capacity_providers" "main" {
 
   default_capacity_provider_strategy {
     capacity_provider = "FARGATE"
-    weight           = 100
+    weight            = 100
   }
 }
 
@@ -343,6 +343,65 @@ resource "aws_cloudwatch_log_group" "worker" {
 
   tags = {
     Name = "${var.project_name}-worker-logs-${var.environment}"
+  }
+}
+
+# Application Load Balancer
+resource "aws_lb" "main" {
+  name               = "${var.project_name}-${var.environment}-alb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb.id]
+  subnets            = aws_subnet.public[*].id
+
+  enable_deletion_protection       = false
+  enable_http2                     = true
+  enable_cross_zone_load_balancing = true
+
+  tags = {
+    Name = "${var.project_name}-alb-${var.environment}"
+  }
+}
+
+# Target Group for ECS Tasks
+resource "aws_lb_target_group" "api" {
+  name        = "${var.project_name}-${var.environment}-tg"
+  port        = 8000
+  protocol    = "HTTP"
+  vpc_id      = aws_vpc.main.id
+  target_type = "ip"
+
+  health_check {
+    enabled             = true
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
+    timeout             = 5
+    interval            = 30
+    path                = "/health"
+    protocol            = "HTTP"
+    matcher             = "200"
+  }
+
+  deregistration_delay = 30
+
+  tags = {
+    Name = "${var.project_name}-tg-${var.environment}"
+  }
+}
+
+# ALB Listener
+resource "aws_lb_listener" "main" {
+  load_balancer_arn = aws_lb.main.arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.api.arn
+  }
+
+  tags = {
+    Name = "${var.project_name}-listener-${var.environment}"
   }
 }
 
@@ -384,4 +443,19 @@ output "security_group_ids" {
     rds         = aws_security_group.rds.id
     elasticache = aws_security_group.elasticache.id
   }
+}
+
+output "alb_dns_name" {
+  description = "DNS name of the load balancer"
+  value       = aws_lb.main.dns_name
+}
+
+output "alb_arn" {
+  description = "ARN of the load balancer"
+  value       = aws_lb.main.arn
+}
+
+output "target_group_arn" {
+  description = "ARN of the target group"
+  value       = aws_lb_target_group.api.arn
 }
