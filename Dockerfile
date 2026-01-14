@@ -48,6 +48,7 @@ RUN apt-get update && apt-get install -y \
     postgresql-client \
     libpq5 \
     curl \
+    libmagic1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy Python dependencies from builder
