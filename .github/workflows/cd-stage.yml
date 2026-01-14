@@ -101,6 +101,21 @@ jobs:
         run: |
           terraform init -backend-config=backend-stage.conf
 
+      - name: Import existing resources into Terraform state
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        env:
+          TF_VAR_environment: ${{ env.ENVIRONMENT }}
+        continue-on-error: true
+        run: |
+          # Import ECR repositories if they exist in AWS but not in state
+          terraform import aws_ecr_repository.api expense-tracker-api || echo "ECR repository 'api' already in state or does not exist"
+          terraform import aws_ecr_repository.worker expense-tracker-worker || echo "ECR repository 'worker' already in state or does not exist"
+          terraform import aws_ecr_repository.flower expense-tracker-flower || echo "ECR repository 'flower' already in state or does not exist"
+
+          # Import CloudWatch log groups if they exist in AWS but not in state
+          terraform import aws_cloudwatch_log_group.api /ecs/expense-tracker-api-stage || echo "CloudWatch log group 'api' already in state or does not exist"
+          terraform import aws_cloudwatch_log_group.worker /ecs/expense-tracker-worker-stage || echo "CloudWatch log group 'worker' already in state or does not exist"
+
       - name: Terraform Plan
         working-directory: ${{ env.TERRAFORM_DIR }}
         env:
@@ -152,13 +167,3 @@ jobs:
           sleep 30
           curl -f https://stage-api.yourdomain.com/health || exit 1
           echo "✅ Stage deployment smoke tests passed!"
-
-      - name: Notify deployment
-        if: always()
-        uses: 8398a7/action-slack@v3
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
-        with:
-          status: ${{ job.status }}
-          text: 'Stage deployment ${{ job.status }}'
-        continue-on-error: true
