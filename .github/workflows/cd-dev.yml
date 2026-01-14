@@ -136,26 +136,24 @@ jobs:
       - name: Update ECS Task Definition
         run: |
           aws ecs describe-task-definition \
-            --task-definition expense-tracker-api-task-dev \
+            --task-definition expense-tracker-api-dev \
             --query taskDefinition > task-definition.json || \
-          aws ecs describe-task-definition \
-            --task-definition expense-tracker-api-task \
-            --query taskDefinition > task-definition.json || \
-          echo "{}" > task-definition.json
+          echo "Task definition not found, creating empty file"
+          echo '{"containerDefinitions":[]}' > task-definition.json
 
       - name: Render ECS Task Definition
         id: task-def
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
           task-definition: task-definition.json
-          container-name: expense-tracker-api
+          container-name: api
           image: ${{ steps.build-api.outputs.image }}
 
       - name: Deploy to ECS
         uses: aws-actions/amazon-ecs-deploy-task-definition@v1
         with:
           task-definition: ${{ steps.task-def.outputs.task-definition }}
-          service: expense-tracker-api-service-dev
+          service: expense-tracker-api-dev
           cluster: ${{ steps.get-cluster.outputs.cluster-name }}
           wait-for-service-stability: true
 
