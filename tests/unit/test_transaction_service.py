@@ -55,6 +55,63 @@ class TestTransactionService:
         assert transaction.category_name == "Test"
         assert transaction.description == "Test transaction"
 
+    async def test_create_transaction_requires_category(self, db_session, sample_user_data):
+        """Test that category_id is required when creating a transaction."""
+        # Create user
+        user = User(
+            email=sample_user_data["email"],
+            password_hash=hash_password(sample_user_data["password"]),
+            is_active=True,
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        # Try to create transaction without category_id - should raise ValidationError
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError) as exc_info:
+            TransactionCreate(
+                amount=Decimal("100.50"),
+                currency="USD",
+                type="expense",
+                description="Test transaction",
+                occurred_at=datetime.now(UTC),
+            )
+
+        # Verify the error mentions category_id
+        errors = exc_info.value.errors()
+        category_errors = [e for e in errors if "category_id" in str(e)]
+        assert len(category_errors) > 0, "Should have validation error for category_id"
+
+    async def test_create_transaction_with_invalid_category(self, db_session, sample_user_data):
+        """Test that creating a transaction with invalid category raises error."""
+        # Create user
+        user = User(
+            email=sample_user_data["email"],
+            password_hash=hash_password(sample_user_data["password"]),
+            is_active=True,
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        service = TransactionService(db_session)
+
+        # Try to create transaction with non-existent category
+        from app.core.exceptions import ValidationException
+
+        with pytest.raises(ValidationException, match="Category not found"):
+            await service.create_transaction(
+                user.id,
+                TransactionCreate(
+                    amount=Decimal("100.50"),
+                    currency="USD",
+                    type="expense",
+                    category_id="non-existent-category-id",
+                    description="Test transaction",
+                    occurred_at=datetime.now(UTC),
+                ),
+            )
+
     async def test_create_transaction_with_tags(self, db_session, sample_user_data):
         """Test creating a transaction with tags."""
         # Create user
@@ -107,6 +164,21 @@ class TestTransactionService:
         db_session.add(user)
         await db_session.flush()
 
+        # Create categories
+        cat_service = CategoryService(db_session)
+        expense_category = await cat_service.create_category(
+            user.id,
+            CategoryCreate(
+                name="Expense Category", type="expense", description="Test expense category"
+            ),
+        )
+        income_category = await cat_service.create_category(
+            user.id,
+            CategoryCreate(
+                name="Income Category", type="income", description="Test income category"
+            ),
+        )
+
         service = TransactionService(db_session)
 
         # Create test transactions
@@ -117,6 +189,7 @@ class TestTransactionService:
                     amount=Decimal(str(100 + i * 10)),
                     currency="USD",
                     type="expense" if i % 2 == 0 else "income",
+                    category_id=expense_category.id if i % 2 == 0 else income_category.id,
                     description=f"Transaction {i}",
                     occurred_at=datetime.now(UTC) - timedelta(days=i),
                 ),
@@ -156,6 +229,12 @@ class TestTransactionService:
         db_session.add(user)
         await db_session.flush()
 
+        # Create category
+        cat_service = CategoryService(db_session)
+        category = await cat_service.create_category(
+            user.id, CategoryCreate(name="Test", type="expense", description="Test category")
+        )
+
         service = TransactionService(db_session)
 
         # Create transaction
@@ -165,6 +244,7 @@ class TestTransactionService:
                 amount=Decimal("100.50"),
                 currency="USD",
                 type="expense",
+                category_id=category.id,
                 description="Test transaction",
                 occurred_at=datetime.now(UTC),
             ),
@@ -237,6 +317,12 @@ class TestTransactionService:
         db_session.add(user)
         await db_session.flush()
 
+        # Create category
+        cat_service = CategoryService(db_session)
+        category = await cat_service.create_category(
+            user.id, CategoryCreate(name="Test", type="expense", description="Test category")
+        )
+
         service = TransactionService(db_session)
 
         # Create transaction
@@ -246,6 +332,7 @@ class TestTransactionService:
                 amount=Decimal("100.50"),
                 currency="USD",
                 type="expense",
+                category_id=category.id,
                 description="Test transaction",
                 occurred_at=datetime.now(UTC),
             ),
@@ -277,6 +364,21 @@ class TestTransactionService:
         db_session.add(user)
         await db_session.flush()
 
+        # Create categories
+        cat_service = CategoryService(db_session)
+        expense_category = await cat_service.create_category(
+            user.id,
+            CategoryCreate(
+                name="Expense Category", type="expense", description="Test expense category"
+            ),
+        )
+        income_category = await cat_service.create_category(
+            user.id,
+            CategoryCreate(
+                name="Income Category", type="income", description="Test income category"
+            ),
+        )
+
         service = TransactionService(db_session)
 
         # Create test transactions
@@ -286,6 +388,7 @@ class TestTransactionService:
                 amount=Decimal("100.00"),
                 currency="USD",
                 type="expense",
+                category_id=expense_category.id,
                 description="Expense 1",
                 occurred_at=datetime.now(UTC),
             ),
@@ -297,6 +400,7 @@ class TestTransactionService:
                 amount=Decimal("50.00"),
                 currency="USD",
                 type="expense",
+                category_id=expense_category.id,
                 description="Expense 2",
                 occurred_at=datetime.now(UTC),
             ),
@@ -308,6 +412,7 @@ class TestTransactionService:
                 amount=Decimal("500.00"),
                 currency="USD",
                 type="income",
+                category_id=income_category.id,
                 description="Income 1",
                 occurred_at=datetime.now(UTC),
             ),

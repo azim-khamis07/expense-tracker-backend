@@ -96,7 +96,7 @@ jobs:
         env:
           TF_VAR_environment: ${{ env.ENVIRONMENT }}
         run: |
-          terraform init -backend-config=${{ env.TERRAFORM_DIR }}/backend-dev.conf
+          terraform init -backend-config=backend-dev.conf
 
       - name: Terraform Plan
         working-directory: ${{ env.TERRAFORM_DIR }}

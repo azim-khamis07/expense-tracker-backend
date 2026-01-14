@@ -18,13 +18,29 @@ A production-ready expense tracking backend with JWT authentication, CRUD operat
 - ✅ Receipt upload to S3 with presigned URLs
 - ✅ Async PDF report generation (Celery)
 
+### Security Features
+- ✅ Argon2 password hashing
+- ✅ JWT authentication with refresh tokens
+- ✅ Redis-based rate limiting
+- ✅ Input validation and sanitization
+- ✅ CORS and security headers
+- ✅ SQL injection prevention
+- ✅ Secrets management
+
+### Observability
+- ✅ Structured JSON logging
+- ✅ Request ID tracking
+- ✅ Health checks (`/health`, `/health/detailed`)
+- ✅ Metrics endpoint (`/metrics`)
+- ✅ Sentry error tracking
+
 ### Technical Highlights
 - 🏗️ Clean architecture (Router → Service → Repository)
 - 🔒 Production-grade security (Argon2, rate limiting, CORS)
 - 📊 Optimized queries with proper indexing
 - 💾 Redis caching with stampede prevention
 - 🐳 Docker Compose for local development
-- ✅ 80%+ test coverage
+- ✅ 77%+ test coverage (target: 80%)
 - 📝 Auto-generated OpenAPI documentation
 
 ## 📋 Prerequisites
@@ -69,10 +85,17 @@ poetry run alembic upgrade head
 poetry run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
+### 7. Start Celery worker (for async tasks)
+```bash
+celery -A app.infra.celery_app worker --loglevel=info -Q reports
+```
+
 The API will be available at:
 - **API**: http://localhost:8000/api/v1/
 - **Docs**: http://localhost:8000/api/v1/docs
 - **ReDoc**: http://localhost:8000/api/v1/redoc
+- **Health**: http://localhost:8000/health
+- **Metrics**: http://localhost:8000/metrics
 
 ## 📁 Project Structure
 
@@ -97,6 +120,7 @@ expense-tracker/
 
 ## 🧪 Testing
 
+### Test Suite
 Run all tests:
 ```bash
 poetry run pytest
@@ -104,13 +128,40 @@ poetry run pytest
 
 Run with coverage:
 ```bash
-poetry run pytest --cov=app --cov-report=html
+poetry run pytest --cov=app --cov-report=html --cov-report=term-missing
 ```
 
 View coverage report:
 ```bash
-open htmlcov/index.html
+open htmlcov/index.html  # macOS
+xdg-open htmlcov/index.html  # Linux
 ```
+
+### Test Markers
+Run specific test types:
+```bash
+poetry run pytest -m unit          # Unit tests only
+poetry run pytest -m integration   # Integration tests only
+poetry run pytest -m slow          # Slow tests
+```
+
+### Performance Testing
+Run load tests:
+```bash
+./scripts/run_load_tests.sh
+```
+
+Check analytics endpoint performance:
+```bash
+./scripts/test_performance.sh
+```
+
+### Test Coverage
+- **Current Coverage**: 77.53%
+- **Target**: 80%+
+- **Unit Tests**: 40+ tests
+- **Integration Tests**: 14+ tests
+- **Load Tests**: Locust-based
 
 ## 🔧 Development Tools
 

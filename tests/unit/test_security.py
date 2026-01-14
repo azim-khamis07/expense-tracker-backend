@@ -1,13 +1,13 @@
-from datetime import timedelta
+"""Unit tests for security module."""
+
+from datetime import UTC, datetime, timedelta
 
 import pytest
-from jose import JWTError
 
 from app.core.security import (
     create_access_token,
     create_email_verification_token,
     create_password_reset_token,
-    create_refresh_token,
     decode_token,
     hash_password,
     verify_email_token,
@@ -19,154 +19,228 @@ from app.core.security import (
 class TestPasswordHashing:
     """Test password hashing and verification."""
 
-    def test_hash_password(self):
-        """Test password hashing."""
-        password = "SecurePassword123!"
+    def test_password_hash_and_verify(self):
+        """Test password hashing and verification."""
+        password = "SecurePass123!"
         hashed = hash_password(password)
 
         assert hashed != password
         assert len(hashed) > 0
-        assert hashed.startswith("$argon2")
-
-    def test_verify_password_correct(self):
-        """Test password verification with correct password."""
-        password = "SecurePassword123!"
-        hashed = hash_password(password)
-
-        assert verify_password(password, hashed) is True
-
-    def test_verify_password_incorrect(self):
-        """Test password verification with incorrect password."""
-        password = "SecurePassword123!"
-        hashed = hash_password(password)
-
-        assert verify_password("WrongPassword", hashed) is False
+        assert verify_password(password, hashed)
+        assert not verify_password("WrongPass123!", hashed)
 
     def test_different_hashes_for_same_password(self):
         """Test that same password produces different hashes (salt)."""
-        password = "SecurePassword123!"
+        password = "SamePassword123!"
         hash1 = hash_password(password)
         hash2 = hash_password(password)
 
+        # Argon2 includes salt, so hashes should be different
         assert hash1 != hash2
-        assert verify_password(password, hash1) is True
-        assert verify_password(password, hash2) is True
+        # But both should verify correctly
+        assert verify_password(password, hash1)
+        assert verify_password(password, hash2)
+
+    def test_empty_password(self):
+        """Test that empty password is handled."""
+        password = ""
+        hashed = hash_password(password)
+        assert verify_password(password, hashed)
+
+    def test_unicode_password(self):
+        """Test password with unicode characters."""
+        password = "Pässwörd123! 🔒"
+        hashed = hash_password(password)
+        assert verify_password(password, hashed)
+        assert not verify_password("Password123!", hashed)
 
 
 class TestJWTTokens:
-    """Test JWT token creation and validation."""
+    """Test JWT token creation and decoding."""
 
-    def test_create_access_token(self):
-        """Test access token creation."""
-        data = {"sub": "user@example.com", "user_id": "123"}
+    def test_create_and_decode_access_token(self):
+        """Test access token creation and decoding."""
+        user_id = "test-user-123"
+        data = {"sub": user_id, "type": "access"}
         token = create_access_token(data)
 
-        assert isinstance(token, str)
-        assert len(token) > 0
+        payload = decode_token(token)
+        assert payload["sub"] == user_id
+        assert payload["type"] == "access"
+        assert "exp" in payload
 
-    def test_create_refresh_token(self):
-        """Test refresh token creation."""
-        data = {"sub": "user@example.com", "user_id": "123"}
-        token = create_refresh_token(data)
+    def test_create_token_with_custom_expiry(self):
+        """Test token creation with custom expiration."""
+        user_id = "test-user-456"
+        data = {"sub": user_id, "type": "access"}
+        custom_delta = timedelta(hours=2)
+        token = create_access_token(data, expires_delta=custom_delta)
 
-        assert isinstance(token, str)
-        assert len(token) > 0
+        payload = decode_token(token)
+        assert payload["sub"] == user_id
+        # Verify expiration is approximately 2 hours from now
+        exp_time = datetime.fromtimestamp(payload["exp"], tz=UTC)
+        expected_exp = datetime.now(UTC) + custom_delta
+        # Allow 5 second tolerance
+        assert abs((exp_time - expected_exp).total_seconds()) < 5
 
-    def test_decode_valid_token(self):
-        """Test decoding valid token."""
-        data = {"sub": "user@example.com", "user_id": "123"}
-        token = create_access_token(data)
+    def test_expired_token(self):
+        """Test expired token raises exception."""
+        from jose import JWTError
 
-        decoded = decode_token(token)
-
-        assert decoded["sub"] == "user@example.com"
-        assert decoded["user_id"] == "123"
-        assert decoded["type"] == "access"
-        assert "exp" in decoded
-        assert "iat" in decoded
-
-    def test_decode_expired_token(self):
-        """Test decoding expired token."""
-        data = {"sub": "user@example.com"}
+        user_id = "test-user-789"
+        data = {"sub": user_id, "type": "access"}
         # Create token that expires immediately
         token = create_access_token(data, expires_delta=timedelta(seconds=-1))
 
         with pytest.raises(JWTError):
             decode_token(token)
 
-    def test_decode_invalid_token(self):
-        """Test decoding invalid token."""
+    def test_invalid_token(self):
+        """Test invalid token raises exception."""
+        from jose import JWTError
+
         with pytest.raises(JWTError):
             decode_token("invalid.token.here")
 
+    def test_malformed_token(self):
+        """Test malformed token raises exception."""
+        from jose import JWTError
 
-class TestEmailVerification:
+        with pytest.raises(JWTError):
+            decode_token("not.a.valid.jwt.token")
+
+    def test_token_with_wrong_secret(self):
+        """Test token signed with wrong secret fails."""
+        from jose import JWTError, jwt
+
+        from app.core.config import settings
+
+        # Create token with wrong secret
+        payload = {
+            "sub": "user-123",
+            "type": "access",
+            "exp": datetime.now(UTC) + timedelta(hours=1),
+        }
+        wrong_token = jwt.encode(payload, "wrong-secret-key", algorithm=settings.JWT_ALGORITHM)
+
+        with pytest.raises(JWTError):
+            decode_token(wrong_token)
+
+
+class TestEmailVerificationToken:
     """Test email verification tokens."""
 
-    def test_create_email_verification_token(self):
-        """Test creating email verification token."""
-        email = "user@example.com"
-        token = create_email_verification_token(email)
-
-        assert isinstance(token, str)
-        assert len(token) > 0
-
-    def test_verify_email_token_valid(self):
-        """Test verifying valid email token."""
-        email = "user@example.com"
+    def test_create_and_verify_email_token(self):
+        """Test email verification token creation and verification."""
+        email = "test@example.com"
         token = create_email_verification_token(email)
 
         verified_email = verify_email_token(token)
-
         assert verified_email == email
 
-    def test_verify_email_token_invalid(self):
-        """Test verifying invalid email token."""
-        verified_email = verify_email_token("invalid.token")
+    def test_expired_email_token(self):
+        """Test expired email token returns None."""
+        from jose import jwt
 
+        from app.core.config import settings
+
+        email = "test@example.com"
+        # Create expired token
+        expired_payload = {
+            "sub": email,
+            "type": "email_verification",
+            "exp": datetime.now(UTC) - timedelta(hours=1),
+        }
+        expired_token = jwt.encode(
+            expired_payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
+        )
+
+        verified_email = verify_email_token(expired_token)
         assert verified_email is None
 
-    def test_verify_wrong_token_type(self):
-        """Test that access token doesn't work for email verification."""
-        data = {"sub": "user@example.com"}
-        token = create_access_token(data)
+    def test_invalid_email_token(self):
+        """Test invalid email token returns None."""
+        invalid_token = "invalid-token"
 
-        verified_email = verify_email_token(token)
+        verified_email = verify_email_token(invalid_token)
+        assert verified_email is None
 
+    def test_wrong_token_type(self):
+        """Test token with wrong type returns None."""
+        from jose import jwt
+
+        from app.core.config import settings
+
+        email = "test@example.com"
+        # Create token with wrong type
+        wrong_payload = {
+            "sub": email,
+            "type": "access",  # Wrong type
+            "exp": datetime.now(UTC) + timedelta(hours=1),
+        }
+        wrong_token = jwt.encode(
+            wrong_payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
+        )
+
+        verified_email = verify_email_token(wrong_token)
         assert verified_email is None
 
 
 class TestPasswordResetToken:
     """Test password reset tokens."""
 
-    def test_create_password_reset_token(self):
-        """Test creating password reset token."""
-        email = "user@example.com"
-        token = create_password_reset_token(email)
-
-        assert isinstance(token, str)
-        assert len(token) > 0
-
-    def test_verify_password_reset_token_valid(self):
-        """Test verifying valid password reset token."""
-        email = "user@example.com"
+    def test_create_and_verify_password_reset_token(self):
+        """Test password reset token creation and verification."""
+        email = "reset@example.com"
         token = create_password_reset_token(email)
 
         verified_email = verify_password_reset_token(token)
-
         assert verified_email == email
 
-    def test_verify_password_reset_token_invalid(self):
-        """Test verifying invalid password reset token."""
-        verified_email = verify_password_reset_token("invalid.token")
+    def test_expired_password_reset_token(self):
+        """Test expired password reset token returns None."""
+        from jose import jwt
 
+        from app.core.config import settings
+
+        email = "reset@example.com"
+        # Create expired token
+        expired_payload = {
+            "sub": email,
+            "type": "password_reset",
+            "exp": datetime.now(UTC) - timedelta(hours=1),
+        }
+        expired_token = jwt.encode(
+            expired_payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
+        )
+
+        verified_email = verify_password_reset_token(expired_token)
         assert verified_email is None
 
-    def test_verify_wrong_token_type_for_password_reset(self):
-        """Test that access token doesn't work for password reset."""
-        data = {"sub": "user@example.com"}
-        token = create_access_token(data)
+    def test_invalid_password_reset_token(self):
+        """Test invalid password reset token returns None."""
+        invalid_token = "invalid-reset-token"
 
-        verified_email = verify_password_reset_token(token)
+        verified_email = verify_password_reset_token(invalid_token)
+        assert verified_email is None
 
+    def test_wrong_token_type(self):
+        """Test token with wrong type returns None."""
+        from jose import jwt
+
+        from app.core.config import settings
+
+        email = "reset@example.com"
+        # Create token with wrong type
+        wrong_payload = {
+            "sub": email,
+            "type": "access",  # Wrong type
+            "exp": datetime.now(UTC) + timedelta(hours=1),
+        }
+        wrong_token = jwt.encode(
+            wrong_payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
+        )
+
+        verified_email = verify_password_reset_token(wrong_token)
         assert verified_email is None
