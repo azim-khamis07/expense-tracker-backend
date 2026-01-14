@@ -28,12 +28,12 @@ print_header() {
 
 print_success() {
     echo -e "${GREEN}✅ $1${NC}"
-    ((PASSED++))
+    PASSED=$((PASSED + 1))
 }
 
 print_error() {
     echo -e "${RED}❌ $1${NC}"
-    ((FAILED++))
+    FAILED=$((FAILED + 1))
 }
 
 print_info() {
@@ -96,37 +96,64 @@ test_linting() {
 setup_test_database() {
     print_header "Step 2: Setting Up Test Database"
 
-    print_info "Checking if PostgreSQL is running..."
-    if docker ps | grep -q postgres; then
-        print_success "PostgreSQL container is running"
-    else
-        print_info "Starting PostgreSQL container..."
-        docker run -d \
-            --name test-postgres \
-            -e POSTGRES_USER=test_user \
-            -e POSTGRES_PASSWORD=test_password \
-            -e POSTGRES_DB=test_db \
-            -p 5432:5432 \
-            postgres:15-alpine || true
+    # Stop and remove existing test containers
+    print_info "Stopping existing test containers..."
+    docker stop test-postgres test-redis 2>/dev/null || true
+    docker rm test-postgres test-redis 2>/dev/null || true
 
-        print_info "Waiting for PostgreSQL to be ready..."
-        sleep 5
-        print_success "PostgreSQL container started"
+    # Use different ports for test containers to avoid conflicts
+    TEST_POSTGRES_PORT=5433
+    TEST_REDIS_PORT=6380
+
+    print_info "Starting PostgreSQL container on port $TEST_POSTGRES_PORT..."
+    docker run -d \
+        --name test-postgres \
+        -e POSTGRES_USER=test_user \
+        -e POSTGRES_PASSWORD=test_password \
+        -e POSTGRES_DB=test_db \
+        -p $TEST_POSTGRES_PORT:5432 \
+        postgres:15-alpine 2>/dev/null || {
+        if docker ps --filter "name=test-postgres" --format '{{.Names}}' | grep -q test-postgres; then
+            print_success "Test PostgreSQL container already running"
+        else
+            print_error "Failed to start PostgreSQL container"
+            return 1
+        fi
+    }
+
+    print_info "Waiting for PostgreSQL to be ready..."
+    sleep 5
+
+    # Verify connection
+    if docker exec test-postgres pg_isready -U test_user > /dev/null 2>&1; then
+        print_success "PostgreSQL container is ready"
+    else
+        print_error "PostgreSQL container failed to start"
+        return 1
     fi
 
-    print_info "Checking if Redis is running..."
-    if docker ps | grep -q redis; then
-        print_success "Redis container is running"
-    else
-        print_info "Starting Redis container..."
-        docker run -d \
-            --name test-redis \
-            -p 6379:6379 \
-            redis:7-alpine || true
+    print_info "Starting Redis container on port $TEST_REDIS_PORT..."
+    docker run -d \
+        --name test-redis \
+        -p $TEST_REDIS_PORT:6379 \
+        redis:7-alpine 2>/dev/null || {
+        if docker ps --filter "name=test-redis" --format '{{.Names}}' | grep -q test-redis; then
+            print_success "Test Redis container already running"
+        else
+            print_error "Failed to start Redis container"
+            return 1
+        fi
+    }
 
-        print_info "Waiting for Redis to be ready..."
-        sleep 3
-        print_success "Redis container started"
+    print_info "Waiting for Redis to be ready..."
+    sleep 3
+
+    # Verify connection
+    if docker exec test-redis redis-cli ping > /dev/null 2>&1; then
+        print_success "Redis container is ready"
+    else
+        print_error "Redis container failed to start"
+        return 1
     fi
 }
 
@@ -134,11 +161,15 @@ setup_test_database() {
 test_migrations() {
     print_header "Step 3: Database Migrations"
 
-    export DATABASE_URL="postgresql+asyncpg://test_user:test_password@localhost:5432/test_db"
-    export REDIS_URL="redis://localhost:6379/0"
+    # Use test container ports
+    TEST_POSTGRES_PORT=5433
+    TEST_REDIS_PORT=6380
+
+    export DATABASE_URL="postgresql+asyncpg://test_user:test_password@localhost:$TEST_POSTGRES_PORT/test_db"
+    export REDIS_URL="redis://localhost:$TEST_REDIS_PORT/0"
     export JWT_SECRET_KEY="test-secret-key-for-migrations"
-    export CELERY_BROKER_URL="redis://localhost:6379/1"
-    export CELERY_RESULT_BACKEND="redis://localhost:6379/2"
+    export CELERY_BROKER_URL="redis://localhost:$TEST_REDIS_PORT/1"
+    export CELERY_RESULT_BACKEND="redis://localhost:$TEST_REDIS_PORT/2"
 
     if poetry run alembic upgrade head; then
         print_success "Database migrations completed"
@@ -152,11 +183,15 @@ test_migrations() {
 test_unit_integration() {
     print_header "Step 4: Unit & Integration Tests"
 
-    export DATABASE_URL="postgresql+asyncpg://test_user:test_password@localhost:5432/test_db"
-    export REDIS_URL="redis://localhost:6379/0"
+    # Use test container ports
+    TEST_POSTGRES_PORT=5433
+    TEST_REDIS_PORT=6380
+
+    export DATABASE_URL="postgresql+asyncpg://test_user:test_password@localhost:$TEST_POSTGRES_PORT/test_db"
+    export REDIS_URL="redis://localhost:$TEST_REDIS_PORT/0"
     export JWT_SECRET_KEY="test-secret-key"
-    export CELERY_BROKER_URL="redis://localhost:6379/1"
-    export CELERY_RESULT_BACKEND="redis://localhost:6379/2"
+    export CELERY_BROKER_URL="redis://localhost:$TEST_REDIS_PORT/1"
+    export CELERY_RESULT_BACKEND="redis://localhost:$TEST_REDIS_PORT/2"
     export ENV="test"
 
     if poetry run pytest tests/ -v --cov=app --cov-report=term-missing --cov-report=xml; then
