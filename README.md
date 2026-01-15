@@ -209,6 +209,20 @@ This is a **full-stack backend system** for expense tracking that demonstrates e
 └───────────────────────────────────────────────────────────────┘
 ```
 
+### Components Architecture
+
+For a detailed **components architecture diagram** showing all modules, services, and their interactions, see:
+📄 **[Components Architecture Diagram](docs/COMPONENTS_ARCHITECTURE.md)**
+
+The components architecture includes:
+- **9 Router Modules** (Auth, Users, Categories, Tags, Transactions, Analytics, Receipts, Reports, Monitoring)
+- **8 Service Classes** (Business logic layer)
+- **6 Repository Classes** (Data access layer)
+- **6 SQLAlchemy Models** (User, Category, Tag, Transaction, Receipt, ReportJob)
+- **Infrastructure Components** (Redis, S3, Celery, Database)
+- **Data Flow Diagrams** for common operations
+- **Background Processing Architecture** (Celery workers)
+
 ### Data Flow
 
 1. **Request** → ALB → ECS API Task
