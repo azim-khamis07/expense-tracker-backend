@@ -561,6 +561,52 @@ poetry run locust -f tests/load/locustfile.py \
 
 ## 🔄 CI/CD Pipeline
 
+### CI/CD Workflow Diagram
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    GITHUB REPOSITORY                        │
+│                                                             │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
+│  │     dev       │  │    stage     │  │  production  │     │
+│  │   branch      │  │   branch     │  │    branch    │     │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘     │
+│         │                 │                  │             │
+└─────────┼─────────────────┼──────────────────┼─────────────┘
+          │                 │                  │
+          ▼                 ▼                  ▼
+    ┌─────────────────────────────────────────────┐
+    │         CI Workflow (ci.yml)                │
+    │  • Lint & Format Check                      │
+    │  • Unit & Integration Tests                 │
+    │  • Security Scan (Trivy)                    │
+    │  • Build Docker Images (validation)         │
+    └─────────────────────────────────────────────┘
+          │                 │                  │
+          ▼                 ▼                  ▼
+    ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+    │ CD Dev       │  │ CD Stage     │  │ CD Production│
+    │ (cd-dev.yml) │  │(cd-stage.yml)│  │(cd-prod.yml) │
+    │              │  │              │  │ + Manual     │
+    │ Auto Deploy  │  │ Auto Deploy  │  │   Approval   │
+    └──────┬───────┘  └──────┬───────┘  └──────┬───────┘
+           │                 │                  │
+           ▼                 ▼                  ▼
+    ┌─────────────────────────────────────────────┐
+    │            AWS Infrastructure                 │
+    │  • Build & Push to ECR                       │
+    │  • Terraform Apply (IaC)                     │
+    │  • ECS Deployment                            │
+    │  • Smoke Tests                               │
+    └─────────────────────────────────────────────┘
+           │                 │                  │
+           ▼                 ▼                  ▼
+    ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+    │  Dev Env     │  │  Stage Env    │  │  Prod Env    │
+    │  (ECS)       │  │  (ECS)        │  │  (ECS)       │
+    └──────────────┘  └──────────────┘  └──────────────┘
+```
+
 ### Continuous Integration (CI)
 
 **Workflow**: `.github/workflows/ci.yml`
