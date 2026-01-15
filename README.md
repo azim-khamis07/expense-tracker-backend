@@ -297,12 +297,27 @@ This is a **full-stack backend system** for expense tracking that demonstrates e
 
 ## 📚 API Documentation
 
+### Live API Documentation
+
+🌐 **Live Demo**: [View Interactive API Documentation](http://expense-tracker-dev-alb-1504937143.us-east-1.elb.amazonaws.com/api/v1/docs)
+
+The live API is deployed on AWS and ready to use. You can:
+- **Test endpoints** directly from the Swagger UI
+- **View request/response schemas** for all endpoints
+- **Try out authentication** and explore protected endpoints
+- **See real-time API responses** from the production environment
+
 ### Interactive Documentation
 
-Once the server is running, access:
+**Local Development:**
 - **Swagger UI**: `http://localhost:8000/api/v1/docs`
 - **ReDoc**: `http://localhost:8000/api/v1/redoc`
 - **OpenAPI JSON**: `http://localhost:8000/api/v1/openapi.json`
+
+**Production (Live):**
+- **Swagger UI**: [http://expense-tracker-dev-alb-1504937143.us-east-1.elb.amazonaws.com/api/v1/docs](http://expense-tracker-dev-alb-1504937143.us-east-1.elb.amazonaws.com/api/v1/docs)
+- **ReDoc**: [http://expense-tracker-dev-alb-1504937143.us-east-1.elb.amazonaws.com/api/v1/redoc](http://expense-tracker-dev-alb-1504937143.us-east-1.elb.amazonaws.com/api/v1/redoc)
+- **OpenAPI JSON**: [http://expense-tracker-dev-alb-1504937143.us-east-1.elb.amazonaws.com/api/v1/openapi.json](http://expense-tracker-dev-alb-1504937143.us-east-1.elb.amazonaws.com/api/v1/openapi.json)
 
 ### API Endpoints Overview
 
@@ -388,21 +403,21 @@ Once the server is running, access:
 ### Installation
 
 1. **Clone the repository**
-   ```bash
-   git clone https://github.com/yourusername/expense-tracker.git
-   cd expense-tracker
-   ```
+```bash
+git clone https://github.com/yourusername/expense-tracker.git
+cd expense-tracker
+```
 
 2. **Set up environment variables**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your configuration
-   ```
+```bash
+cp .env.example .env
+# Edit .env with your configuration
+```
 
 3. **Start Docker services**
-   ```bash
-   docker compose up -d
-   ```
+```bash
+docker compose up -d
+```
    This starts:
    - PostgreSQL (port 5432)
    - Redis (port 6379)
@@ -411,24 +426,24 @@ Once the server is running, access:
    - MinIO (ports 9000, 9001)
 
 4. **Install dependencies**
-   ```bash
-   poetry install
-   ```
+```bash
+poetry install
+```
 
 5. **Run database migrations**
-   ```bash
-   poetry run alembic upgrade head
-   ```
+```bash
+poetry run alembic upgrade head
+```
 
 6. **Start the development server**
-   ```bash
-   poetry run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-   ```
+```bash
+poetry run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
 
 7. **Start Celery worker** (in a separate terminal)
-   ```bash
-   celery -A app.infra.celery_app worker --loglevel=info -Q reports
-   ```
+```bash
+celery -A app.infra.celery_app worker --loglevel=info -Q reports
+```
 
 8. **Start Flower** (optional, for monitoring Celery)
    ```bash
@@ -612,8 +627,17 @@ poetry run locust -f tests/load/locustfile.py \
 ### Environment-Specific Configuration
 
 - **Dev**: Auto-deploy on push to `dev` branch
+  - Live URL: http://expense-tracker-dev-alb-1504937143.us-east-1.elb.amazonaws.com
 - **Stage**: Auto-deploy on push to `stage` branch or PR merge
 - **Production**: Manual approval required, deploys on PR merge to `production` branch
+
+### Workflow Summary
+
+| Environment | Trigger | Approval | Auto-Deploy | Live URL |
+|------------|---------|----------|-------------|----------|
+| **Dev** | Push to `dev` | ❌ None | ✅ Yes | [View Live API](http://expense-tracker-dev-alb-1504937143.us-east-1.elb.amazonaws.com/api/v1/docs) |
+| **Stage** | Push/PR to `stage` | ❌ None | ✅ Yes | TBD |
+| **Production** | PR merge to `production` | ✅ Manual | ✅ After approval | TBD |
 
 ---
 
