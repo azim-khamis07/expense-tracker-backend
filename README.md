@@ -968,18 +968,6 @@ expense-tracker/
 
 ---
 
-## 🤝 Contributing
-
-Contributions are welcome! Please follow these steps:
-
-1. **Fork the repository**
-2. **Create a feature branch** (`git checkout -b feature/amazing-feature`)
-3. **Make your changes** following the code style guidelines
-4. **Run tests and linting** (`poetry run pytest && poetry run ruff check app/`)
-5. **Commit your changes** (`git commit -m 'Add amazing feature'`)
-6. **Push to the branch** (`git push origin feature/amazing-feature`)
-7. **Open a Pull Request**
-
 ### Code Style
 
 - Follow **PEP 8** style guide
@@ -1050,12 +1038,6 @@ This project showcases expertise in:
 - ✅ Health checks
 - ✅ Error tracking
 - ✅ Performance monitoring
-
----
-
-## 📞 Contact & Support
-
-For questions, issues, or contributions, please open an issue on GitHub.
 
 ---
 
